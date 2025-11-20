@@ -2,30 +2,9 @@
 
 #include <vector>
 #include <span>
-#include <cstdint>
 
-using dist_t = uint16_t;
-
-struct Location
-{
-	uint16_t x, y;
-	/**
-	 * @brief Calculate the Euclidean distance to another location
-	 * 
-	 * @return dist_t The distance rounded up to the nearest integer
-	 */
-	dist_t distance_to(const Location& other) const;
-};
-
-struct Node
-{
-	Location location;
-	// the change in vehicle capacity when visiting this node
-	// positive for pickups, negative for dropoffs
-	int capacity_change;
-
-	bool is_pickup() const { return capacity_change > 0; }
-};
+#include "core/primitives.h"
+#include "util/canvas.h"
 
 struct CustomerRequest
 {
@@ -115,6 +94,8 @@ public:
 	 * @return Instance The loaded instance
 	 */
 	static Instance load_from_file(const char* filename);
-	
+
+	void draw(Canvas& canvas, bool draw_links) const;
+
 	void print() const;
 };

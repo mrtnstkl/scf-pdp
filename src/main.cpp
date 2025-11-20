@@ -5,6 +5,7 @@
 #include "core/instance.h"
 #include "core/solution.h"
 #include "heuristics/construction.h"
+#include "util/canvas.h"
 
 int main(int argc, char* argv[])
 {
@@ -21,6 +22,27 @@ int main(int argc, char* argv[])
 	Solution solution = construction::construct_deterministic(instance);
 	solution.print();
 	solution.write_to_file("out.txt");
+
+	Canvas canvas;
+	canvas.scale = 8.f;
+	canvas.width = 70 * canvas.scale;
+	canvas.height = 70 * canvas.scale;
+	canvas.bg_color = COLOR_BLACK;
+	canvas.stroke_width = .2f;
+	solution.draw(canvas);
+
+	Gui gui;
+	if (!gui.init("SCF-PDP Solver", 600, 800))
+	{
+		std::cerr << "Failed to initialize GUI." << std::endl;
+		return 1;
+	}
+	while (!gui.should_close())
+	{
+		gui.push_element(&canvas);
+		gui.update();
+	}
+	gui.close();
 
 	return 0;
 }

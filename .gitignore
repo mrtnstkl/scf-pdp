@@ -1,4 +1,5 @@
 .vscode
 build
 out.txt
+imgui.ini
 compile_commands.json

@@ -4,6 +4,7 @@
 #include <list>
 
 #include "instance.h"
+#include "util/canvas.h"
 
 struct Route
 {
@@ -44,6 +45,8 @@ struct Solution
 	bool validate() const;
 
 	void print() const;
+
+	void draw(Canvas& canvas) const;
 
 	void write_to_file(const char* filename, const char* comment = "solution") const;
 };

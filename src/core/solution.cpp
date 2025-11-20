@@ -109,6 +109,25 @@ void Solution::print() const
 	}
 }
 
+void Solution::draw(Canvas& canvas) const
+{
+	instance->draw(canvas, true);
+	Color::random(123);
+	for (const auto& route : routes)
+	{
+		Color c = Color::random();
+		if (route.nodes.empty()) continue;
+		canvas.add(Line{ route.depot.x, route.depot.y, route.nodes.front()->location.x, route.nodes.front()->location.y, c });
+		for (auto it = route.nodes.begin(); it != std::prev(route.nodes.end()); ++it)
+		{
+			auto& current = *it;
+			auto& next = *std::next(it);
+			canvas.add(Line{ current->location.x, current->location.y, next->location.x, next->location.y, c });
+		}
+		canvas.add(Line{ route.nodes.back()->location.x, route.nodes.back()->location.y, route.depot.x, route.depot.y, c });
+	}
+}
+
 void Solution::write_to_file(const char* filename, const char* comment) const
 {
 	std::ofstream file(filename);

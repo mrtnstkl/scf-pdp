@@ -8,13 +8,6 @@
 #include <numbers>
 #include <cassert>
 
-uint16_t Location::distance_to(const Location& other) const
-{
-	const float dx = x - (float) other.x;
-	const float dy = y - (float) other.y;
-	return std::ceil(std::sqrt(dx * dx + dy * dy));
-}
-
 void Instance::compute_distance_matrix()
 {
 	for (size_t i = 0; i < nodes.size(); ++i)
@@ -137,6 +130,26 @@ Instance Instance::load_from_file(const char* filename)
 	}
 	instance.compute_distance_matrix();
 	return instance;
+}
+
+void Instance::draw(Canvas& canvas, bool draw_links) const
+{
+	if (draw_links)
+	{
+		for (const auto& request : requests)
+		{
+			canvas.add(Line{
+				request.pickup_node->location,
+				request.dropoff_node->location,
+				COLOR_DARK_GRAY
+			});
+		}
+	}
+	for (const auto& node : pickups)
+		canvas.add(Circle{ node.location.x, node.location.y, .5f, COLOR_CYAN, true });
+	for (const auto& node : dropoffs)
+		canvas.add(Circle{ node.location.x, node.location.y, .5f, COLOR_ORANGE, true });
+	canvas.add(Circle{ depot.x, depot.y, .7f, COLOR_MAGENTA, true });
 }
 
 void Instance::print() const
