@@ -10,8 +10,9 @@
 #include "../util/canvas.h"
 
 
-class DeterministicConstruction : public GuiElement
+class ConstructionHeuristic : public GuiElement
 {
+protected:
 	Instance* instance_;
 	size_t step_ = 0;
 	bool done_ = false;
@@ -25,6 +26,11 @@ class DeterministicConstruction : public GuiElement
 		int load = 0;
 		std::set<CustomerRequest*> loaded_requests;
 		std::vector<Node*> path;
+
+		Driver(int id = 0) : id(id) {}
+
+		void visit(Node* node, Instance& instance);
+		bool fits(Node* node, Instance& instance) const;
 	};
 
 	std::multimap<dist_t, Driver> busy_drivers_;
@@ -35,20 +41,40 @@ class DeterministicConstruction : public GuiElement
 
 	struct
 	{
+		const char* name_ = "Base Construction Heuristic";
 		int solution_index_ = 0;
 		Canvas canvas_;
 	} gui;
 
 	void reset();
 
-public:
-	DeterministicConstruction(Instance* instance, bool keep_history = false);
+	virtual void step() = 0;
 
-	void step();
+public:
+	ConstructionHeuristic(Instance* instance, bool keep_history, const char* name);
+
+	void compute_next();
 	void run_to_completion();
 
 	Solution get_current_solution();
 	bool done() const;
 
 	void draw() override;
+};
+
+
+class RandomConstruction : public ConstructionHeuristic
+{
+	void step() override;
+public:
+	RandomConstruction(Instance* instance, bool keep_history = false)
+		: ConstructionHeuristic(instance, keep_history, "Random Construction Heuristic") {}
+};
+
+class DeterministicConstructionHeuristic : public ConstructionHeuristic
+{
+	void step() override;
+public:
+	DeterministicConstructionHeuristic(Instance* instance, bool keep_history = false)
+		: ConstructionHeuristic(instance, keep_history, "Deterministic Construction Heuristic") {}
 };

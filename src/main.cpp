@@ -20,7 +20,8 @@ int main(int argc, char* argv[])
 	Instance instance = Instance::load_from_file(args[1].c_str());
 	instance.print();
 	
-	DeterministicConstruction dcon(&instance, true);
+	DeterministicConstructionHeuristic dcon(&instance, true);
+	RandomConstruction rcon(&instance, true);
 
 	Gui gui;
 	if (!gui.init("SCF-PDP Solver", 600, 800))
@@ -31,6 +32,7 @@ int main(int argc, char* argv[])
 	while (!gui.should_close())
 	{
 		gui.push_element(&dcon);
+		gui.push_element(&rcon);
 		gui.update();
 	}
 	gui.close();
