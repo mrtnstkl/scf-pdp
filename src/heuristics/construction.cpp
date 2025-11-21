@@ -54,8 +54,8 @@ void ConstructionHeuristic::reset()
 	gui.solution_index_ = 0;
 }
 
-ConstructionHeuristic::ConstructionHeuristic(Instance* instance, bool record_history, const char* name)
-	: instance_(instance), record_history_(record_history)
+ConstructionHeuristic::ConstructionHeuristic(Instance* instance, const char* name)
+	: instance_(instance)
 {
 	gui.name_ = name;
 	const float width_target = 560.f;
@@ -128,6 +128,16 @@ void ConstructionHeuristic::draw()
 
 		gui.canvas_.draw();
 
+		if (ImGui::Checkbox("Enable History", &record_history_))
+		{
+			gui.solution_index_ = 0;
+			if (!record_history_)
+			{
+				history_ = { get_current_solution() };
+				gui.canvas_.clear();
+				Solution(instance_).draw(gui.canvas_);
+			}
+		}
 		if (record_history_)
 		{
 			if (ImGui::SliderInt("History", &gui.solution_index_, 0, (int)history_.size() - 1))
@@ -138,10 +148,9 @@ void ConstructionHeuristic::draw()
 		}
 		else if (gui.solution_index_ != step_)
 		{
-			gui.canvas_.clear();
-			history_ = { get_current_solution() };
-			history_.back().draw(gui.canvas_);
 			gui.solution_index_ = step_;
+			gui.canvas_.clear();
+			history_.back().draw(gui.canvas_);
 		}
 
 		Solution& soln = record_history_ ? history_.at(gui.solution_index_) : history_.back();

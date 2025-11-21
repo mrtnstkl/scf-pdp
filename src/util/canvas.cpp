@@ -48,7 +48,7 @@ void Canvas::draw()
 	const auto py = p.y;
 
 	ImDrawList* draw_list = ImGui::GetWindowDrawList();
-	draw_list->AddRectFilled(p, ImVec2(py + width, py + height), ImColor(bg_color.r, bg_color.g, bg_color.b, 255));
+	draw_list->AddRectFilled(p, ImVec2(px + width, py + height), ImColor(bg_color.r, bg_color.g, bg_color.b, 255));
 	draw_list->AddRect(p, ImVec2(px + width, py + height), ImColor(0, 0, 0, 255), 0.0f, 0, 4.0f);
 
 	const float s = scale;

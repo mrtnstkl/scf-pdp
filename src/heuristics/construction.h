@@ -16,7 +16,7 @@ protected:
 	Instance* instance_;
 	size_t step_ = 0;
 	bool done_ = false;
-	bool record_history_;
+	bool record_history_ = true;
 	std::vector<Solution> history_;
 
 	struct Driver
@@ -51,7 +51,7 @@ protected:
 	virtual void step() = 0;
 
 public:
-	ConstructionHeuristic(Instance* instance, bool keep_history, const char* name);
+	ConstructionHeuristic(Instance* instance, const char* name);
 
 	void compute_next();
 	void run_to_completion();
@@ -67,14 +67,14 @@ class RandomConstruction : public ConstructionHeuristic
 {
 	void step() override;
 public:
-	RandomConstruction(Instance* instance, bool keep_history = false)
-		: ConstructionHeuristic(instance, keep_history, "Random Construction Heuristic") {}
+	RandomConstruction(Instance* instance)
+		: ConstructionHeuristic(instance, "Random Construction Heuristic") {}
 };
 
 class DeterministicConstructionHeuristic : public ConstructionHeuristic
 {
 	void step() override;
 public:
-	DeterministicConstructionHeuristic(Instance* instance, bool keep_history = false)
-		: ConstructionHeuristic(instance, keep_history, "Deterministic Construction Heuristic") {}
+	DeterministicConstructionHeuristic(Instance* instance)
+		: ConstructionHeuristic(instance, "Deterministic Construction Heuristic") {}
 };
