@@ -7,136 +7,199 @@
 #include <algorithm>
 #include <ranges>
 
+#include "imgui.h"
+
 #include "../util/timer.hpp"
 
-Solution construction::construct_deterministic(Instance& instance)
+void DeterministicConstruction::reset()
 {
-	std::cout << "Constructing initial solution...\n";
+	Solution empty_solution(instance_);
+	gui.canvas_.clear();
+	empty_solution.draw(gui.canvas_);
+	history_ = {empty_solution};
+	step_ = 0;
+	done_ = false;
+	accepted_requests_ = 0;
+	served_requests_ = 0;
+	busy_drivers_.clear();
+	finished_drivers_.clear();
+	unvisited_pickups_.clear();
+	gui.solution_index_ = 0;
+}
 
-	Timer timer;
+DeterministicConstruction::DeterministicConstruction(Instance* instance, bool record_history)
+	: instance_(instance), record_history_(record_history)
+{
+	const float width_target = 560.f;
+	Solution(instance_).draw(gui.canvas_);
+	auto [max_x, max_y] = gui.canvas_.get_max_extent();
+	gui.canvas_.scale = width_target / max_x;
+	gui.canvas_.width = width_target;
+	gui.canvas_.height = max_y * gui.canvas_.scale;
+	gui.canvas_.bg_color = COLOR_BLACK;
+	gui.canvas_.stroke_width = .2f;
+	reset();
+}
 
-	struct Driver
+void DeterministicConstruction::step()
+{
+	if (done_)
+		return;
+	if (step_ == 0)
 	{
-		int id;
-		dist_t time = 0;
-		int load = 0;
-		std::set<CustomerRequest*> loaded_requests;
-		std::vector<Node*> path;
-	};
-
-	// drivers sorted by their current time
-	// this allows efficient retrieval of the driver that is furthest behind
-	std::multimap<dist_t, Driver> drivers;
-
-	std::unordered_set<Node*> unvisited_pickups;
-	for (Node& pickup : instance.pickups)
-		unvisited_pickups.insert(&pickup);
-
-	// find the closest pickup locations to the depot
-	{
-		std::vector<Node*> pickups_near_depot = {unvisited_pickups.begin(), unvisited_pickups.end()};
-		std::ranges::stable_sort(pickups_near_depot, [&](Node* a, Node* b)
-			{ return instance.get_distance(a) > instance.get_distance(b); }
-		);
-		for (size_t i = 0; i < std::min<size_t>(instance.vehicle_count, pickups_near_depot.size()); ++i)
+		for (Node& pickup : instance_->pickups)
+			unvisited_pickups_.insert(&pickup);
+		// find the closest pickup locations to the depot
+		std::vector<Node*> pickups_near_depot = {unvisited_pickups_.begin(), unvisited_pickups_.end()};
+		//std::ranges::stable_sort(pickups_near_depot, [&](Node* a, Node* b)
+		//	{ return instance.get_distance(a) > instance.get_distance(b); }
+		//);
+		for (size_t i = 0; i < std::min<size_t>(instance_->vehicle_count, pickups_near_depot.size()); ++i)
 		{
 			Node* pickup = pickups_near_depot[i]; // next closest pickup
-			unvisited_pickups.erase(pickup); // remove from unvisited nodes
+			unvisited_pickups_.erase(pickup); // remove from unvisited nodes
 			Driver driver;
 			driver.id = (int)i;
 			driver.path.push_back(pickup); // add pickup to driver path
-			driver.loaded_requests.insert(&instance.get_request_from_node(pickup)); // add request to driver
-			driver.time = instance.get_distance(pickup);
+			driver.loaded_requests.insert(&instance_->get_request_from_node(pickup)); // add request to driver
+			driver.time = instance_->get_distance(pickup);
 			driver.load = pickup->capacity_change; 
-			drivers.insert({driver.time, driver});
-			//std::cout << "Driver " << driver.id << " starting with pickup at ("
-			//	<< pickup->location.x << ", " << pickup->location.y << ") with distance "
-			//	<< driver.time << "\n";
+			busy_drivers_.insert({driver.time, driver});
 		}
 	}
-
-	size_t accepted_requests = 0;
-	size_t served_requests = 0;
-	const size_t request_target = instance.min_requests;
-
-	std::vector<Driver> finished_drivers;
-	while (!drivers.empty())
+	if (busy_drivers_.empty())
 	{
-		// select the driver that is furthest behind
-		Driver driver = std::move(drivers.begin()->second);
-		drivers.erase(drivers.begin());
+		done_ = true;
+		return;
+	}
+	
+	// select the driver that is furthest behind
+	Driver driver = std::move(busy_drivers_.begin()->second);
+	busy_drivers_.erase(busy_drivers_.begin());
 
-		// find the closest node that is either...
-		Node* closest_node = nullptr;
-		uint16_t closest_dist = UINT16_MAX;
-		// ...a dropoff for a loaded request...
-		for (CustomerRequest* request : driver.loaded_requests)
+	// find the closest node that is either...
+	Node* closest_node = nullptr;
+	uint16_t closest_dist = UINT16_MAX;
+	// ...a dropoff for a loaded request...
+	for (CustomerRequest* request : driver.loaded_requests)
+	{
+		const auto dist = instance_->get_distance(request->dropoff_node, driver.path.back());
+		if (dist < closest_dist)
 		{
-			const auto dist = instance.get_distance(request->dropoff_node, driver.path.back());
+			closest_dist = dist;
+			closest_node = request->dropoff_node;
+		}
+	}
+	// ...or a pickup of a new one that fits (only if we still need more requests)
+	if (accepted_requests_ < instance_->min_requests)
+	{
+		for (Node* pickup : unvisited_pickups_)
+		{
+			if (driver.load + pickup->capacity_change > instance_->vehicle_capacity)
+				continue; // would exceed capacity
+			const auto dist = instance_->get_distance(pickup, driver.path.back());
 			if (dist < closest_dist)
 			{
 				closest_dist = dist;
-				closest_node = request->dropoff_node;
+				closest_node = pickup;
 			}
 		}
-		// ...or a pickup of a new one that fits (only if we still need more requests)
-		if (accepted_requests < request_target)
-		{
-			for (Node* pickup : unvisited_pickups)
-			{
-				if (driver.load + pickup->capacity_change > instance.vehicle_capacity)
-					continue; // would exceed capacity
-				const auto dist = instance.get_distance(pickup, driver.path.back());
-				if (dist < closest_dist)
-				{
-					closest_dist = dist;
-					closest_node = pickup;
-				}
-			}
-		}
-
-		// no more suitible nodes, driver is finished
-		if (closest_node == nullptr)
-		{
-			//std::cout << "Driver " << driver.id << " finished with "
-			//	<< driver.path.size() << " nodes and time " << driver.time << "\n";
-			finished_drivers.emplace_back(std::move(driver));
-			continue;
-		}
-
-		//std::cout << "Driver " << driver.id << " @" << driver.time << " visiting node at ("
-		//	<< closest_node->location.x << ", " << closest_node->location.y << ") "
-		//	<< (closest_node->is_pickup() ? "pickup" : "dropoff") << " with distance "
-		//	<< closest_dist << "\n";
-
-		// add the node to the driver's path
-		driver.time += closest_dist;
-		driver.load += closest_node->capacity_change;
-		driver.path.push_back(closest_node);
-		if (closest_node->is_pickup())
-		{
-			unvisited_pickups.erase(closest_node);
-			driver.loaded_requests.insert(&instance.get_request_from_node(closest_node));
-		}
-		else
-		{
-			driver.loaded_requests.erase(&instance.get_request_from_node(closest_node));
-			served_requests++;
-		}
-		drivers.insert({driver.time, std::move(driver)});
 	}
 
-	timer.stop();
-	std::cout << "Initial solution constructed in " << timer.get<std::string>() << "\n";
-
-	Solution sol(&instance, false);
-	for (auto& driver : finished_drivers)
+	// no more suitible nodes, driver is finished
+	if (closest_node == nullptr)
 	{
-		Route route;
-		route.depot = instance.depot;
+		finished_drivers_.emplace_back(std::move(driver));
+		return;
+	}
+
+	// add the node to the driver's path
+	driver.time += closest_dist;
+	driver.load += closest_node->capacity_change;
+	driver.path.push_back(closest_node);
+	if (closest_node->is_pickup())
+	{
+		unvisited_pickups_.erase(closest_node);
+		driver.loaded_requests.insert(&instance_->get_request_from_node(closest_node));
+	}
+	else
+	{
+		driver.loaded_requests.erase(&instance_->get_request_from_node(closest_node));
+		served_requests_++;
+	}
+	busy_drivers_.insert({driver.time, std::move(driver)});
+
+	if (record_history_)
+		history_.emplace_back(get_current_solution());
+	step_++;
+}
+
+void DeterministicConstruction::run_to_completion()
+{
+	while (!done_)
+		step();
+}
+
+Solution DeterministicConstruction::get_current_solution()
+{
+	Solution sol(instance_, true);
+	for (const auto& [time, driver] : busy_drivers_)
+	{
+		Route& route = sol.routes.at(driver.id);
 		route.nodes = {driver.path.begin(), driver.path.end()};
 		route.total_distance = sol.calculate_route_time(route);
-		sol.routes.emplace_back(route);
+	}
+	for (auto& driver : finished_drivers_)
+	{
+		Route& route = sol.routes.at(driver.id);
+		route.nodes = {driver.path.begin(), driver.path.end()};
+		route.total_distance = sol.calculate_route_time(route);
 	}
 	return sol;
+}
+
+bool DeterministicConstruction::done() const
+{
+	return done_;
+}
+
+void DeterministicConstruction::draw()
+{
+	if (ImGui::CollapsingHeader("Deterministic Constructor"))
+	{
+		if (ImGui::Button("Reset"))
+			reset();
+		if (!done_)
+		{
+			if (ImGui::SameLine(), ImGui::Button("Step"))
+				step();
+			if (ImGui::SameLine(), ImGui::Button("End"))
+				run_to_completion();
+		}
+		ImGui::Text("Step: %zu", step_);
+		ImGui::Text("Served Requests: %zu", served_requests_);
+
+		gui.canvas_.draw();
+
+		if (record_history_)
+		{
+			if (ImGui::SliderInt("History", &gui.solution_index_, 0, (int)history_.size() - 1))
+			{
+				gui.canvas_.clear();
+				history_[gui.solution_index_].draw(gui.canvas_);
+			}
+		}
+		else if (gui.solution_index_ != step_)
+		{
+			gui.canvas_.clear();
+			history_ = { get_current_solution() };
+			history_.back().draw(gui.canvas_);
+			gui.solution_index_ = step_;
+		}
+
+		Solution& soln = record_history_ ? history_.at(gui.solution_index_) : history_.back();
+
+		ImGui::Text("Current Cost: %.2f", soln.calculate_cost());
+		ImGui::Text("Current Fairness: %.4f", soln.calculate_jain_fairness());
+	}
 }

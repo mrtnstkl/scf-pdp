@@ -19,17 +19,8 @@ int main(int argc, char* argv[])
 
 	Instance instance = Instance::load_from_file(args[1].c_str());
 	instance.print();
-	Solution solution = construction::construct_deterministic(instance);
-	solution.print();
-	solution.write_to_file("out.txt");
-
-	Canvas canvas;
-	canvas.scale = 8.f;
-	canvas.width = 70 * canvas.scale;
-	canvas.height = 70 * canvas.scale;
-	canvas.bg_color = COLOR_BLACK;
-	canvas.stroke_width = .2f;
-	solution.draw(canvas);
+	
+	DeterministicConstruction dcon(&instance, true);
 
 	Gui gui;
 	if (!gui.init("SCF-PDP Solver", 600, 800))
@@ -39,7 +30,7 @@ int main(int argc, char* argv[])
 	}
 	while (!gui.should_close())
 	{
-		gui.push_element(&canvas);
+		gui.push_element(&dcon);
 		gui.update();
 	}
 	gui.close();

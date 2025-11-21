@@ -69,9 +69,11 @@ struct Canvas : public GuiElement
 	float scale = 1.0f;
 	Color bg_color = COLOR_WHITE;
 	float stroke_width = 1.0f;
-	std::vector<std::variant<Line, Circle>> elements = {};
+	using Element = std::variant<Line, Circle>;
+	std::vector<Element> elements = {};
 	void clear();
-	void add(const std::variant<Line, Circle>& element);
+	void add(const Element& element);
+	std::pair<int, int> get_max_extent() const;
 	void draw() override;
 };
 

@@ -25,9 +25,32 @@ void Canvas::clear()
 	elements.clear();
 }
 
-void Canvas::add(const std::variant<Line, Circle>& element)
+void Canvas::add(const Element& element)
 {
 	elements.push_back(element);
+}
+
+std::pair<int, int> Canvas::get_max_extent() const
+{
+	int max_x = 0;
+	int max_y = 0;
+	for (const auto& element : elements)
+	{
+		std::visit([&](auto&& arg) {
+			using T = std::decay_t<decltype(arg)>;
+			if constexpr (std::is_same_v<T, Line>)
+			{
+				max_x = std::max({ max_x, static_cast<int>(arg.x1), static_cast<int>(arg.x2) });
+				max_y = std::max({ max_y, static_cast<int>(arg.y1), static_cast<int>(arg.y2) });
+			}
+			else if constexpr (std::is_same_v<T, Circle>)
+			{
+				max_x = std::max(max_x, static_cast<int>(arg.x + arg.radius));
+				max_y = std::max(max_y, static_cast<int>(arg.y + arg.radius));
+			}
+		}, element);
+	}
+	return { max_x, max_y };
 }
 
 void Canvas::draw()
@@ -93,7 +116,11 @@ void Gui::draw_elements()
 	if (ImGui::Begin("Main Window", nullptr, flags))
 	{
 		for (GuiElement* element : elements_)
+		{
+			ImGui::PushID(element);
 			element->draw();
+			ImGui::PopID();
+		}
 		elements_.clear();
 	}
 	ImGui::End();
