@@ -15,12 +15,12 @@ Solution::Solution(Instance* instance, bool init)
 		route.depot = instance->depot;
 }
 
-int Solution::calculate_route_time(const Route& route) const
+uint64_t Solution::calculate_route_time(const Route& route) const
 {
 	if (route.nodes.empty())
 		return 0;
 
-	int total = instance->get_distance(route.nodes.front()) + instance->get_distance(route.nodes.back());
+	uint64_t total = instance->get_distance(route.nodes.front()) + instance->get_distance(route.nodes.back());
 	if (route.nodes.size() == 1)
 		return total;
 
@@ -34,11 +34,11 @@ int Solution::calculate_route_time(const Route& route) const
 float Solution::calculate_jain_fairness() const
 {
 	const int n = instance->request_count;
-	int route_sum = 0;
-	int route_sq_sum = 0;
+	uint64_t route_sum = 0;
+	uint64_t route_sq_sum = 0;
 	for (const auto& route : routes)
 	{
-		const int d = route.total_distance;
+		const uint64_t d = route.total_distance;
 		route_sum += d;
 		route_sq_sum += d * d;
 	}

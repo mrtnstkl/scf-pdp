@@ -11,7 +11,7 @@ struct Route
 	Location depot; // the depot, which is always the start and end point of the route
 	std::list<Node*> nodes; // the nodes in the route, excluding the depot
 
-	int total_distance;
+	uint64_t total_distance;
 };
 
 struct Solution
@@ -30,7 +30,7 @@ struct Solution
 	 * @param route The route to calculate the time for
 	 * @return int The total time (distance) of the route
 	 */
-	int calculate_route_time(const Route& route) const;
+	uint64_t calculate_route_time(const Route& route) const;
 
 	float calculate_jain_fairness() const;
 
