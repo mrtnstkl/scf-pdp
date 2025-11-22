@@ -167,6 +167,7 @@ size_t GreedyNearestAny::step()
 			Driver driver{i};
 			driver.visit(pickup, *instance);
 			s.busy_drivers.insert({driver.time, driver});
+			s.accepted_requests++;
 		}
 	}
 	else if (s.busy_drivers.empty())
@@ -215,7 +216,10 @@ size_t GreedyNearestAny::step()
 	s.busy_drivers.insert({driver.time, std::move(driver)});
 
 	if (closest_node->is_pickup())
+	{
 		s.unvisited_pickups.erase(closest_node);
+		s.accepted_requests++;
+	}
 	else
 		s.served_requests++;
 	return ++s.step;
