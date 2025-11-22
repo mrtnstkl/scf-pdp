@@ -130,6 +130,11 @@ float DeltaCalculator::cost() const
 	return route_sum + instance->fairness * (1.f - fairness());
 }
 
+float DeltaCalculator::cost(float fairness) const
+{
+	return route_sum + instance->fairness * (1.f - fairness);
+}
+
 
 Solution::Solution(Instance* instance, bool init)
 	: instance(instance)

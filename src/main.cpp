@@ -6,6 +6,7 @@
 #include "core/instance.h"
 #include "core/solution.h"
 #include "heuristics/construction.h"
+#include "heuristics/beamsearch.h"
 #include "util/canvas.h"
 #include "util/visualization.h"
 
@@ -28,12 +29,14 @@ int main(int argc, char* argv[])
 	auto gcon = GreedyRandomizedClosest(&instance);
 	auto wcon = GreedyNearestWeighted(&instance);
 	auto rcon = RandomConstruction(&instance);
+	auto bsearch = BeamSearch(&instance);
 
 	auto algorithms = std::array{
 		AlgorithmGui("Greedy Nearest Any", &dcon),
 		AlgorithmGui("Greedy Nearest Radnomized", &gcon),
 		AlgorithmGui("Greedy Nearest Weighted", &wcon),
 		AlgorithmGui("Randomized", &rcon),
+		AlgorithmGui("Beam Search", &bsearch)
 	};
 
 	Gui gui;

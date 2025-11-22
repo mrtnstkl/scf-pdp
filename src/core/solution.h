@@ -16,6 +16,7 @@ struct Route
 
 struct SolutionMetrics
 {
+	size_t step;
 	size_t route_count;
 	float total_cost;
 	float fairness;
@@ -35,6 +36,7 @@ struct DeltaCalculator
 	void remove_stop(int route_id, const Node* prev_node, const Node* old_node, const Node* next_node);
 	float fairness() const;
 	float cost() const;
+	float cost(float fairness) const;
 };
 
 struct Solution
