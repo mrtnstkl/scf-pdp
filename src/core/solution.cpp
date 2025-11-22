@@ -92,6 +92,8 @@ bool Solution::validate() const
 			if (current_load < 0 || current_load > instance->vehicle_capacity)
 				return false; // capacity violation
 		}
+		if (!current_requests.empty())
+			return false; // not all pickups were dropped off
 	}
 	if (all_served.size() < instance->min_requests)
 		return false; // less customer requests have been fullfilled than required
