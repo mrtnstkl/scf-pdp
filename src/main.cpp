@@ -25,11 +25,13 @@ int main(int argc, char* argv[])
 	//instance.print();
 
 	auto dcon = GreedyNearestAny(&instance);
+	auto gcon = GreedyRandomizedClosest(&instance);
 	auto wcon = GreedyNearestWeighted(&instance);
 	auto rcon = RandomConstruction(&instance);
 
 	auto algorithms = std::array{
 		AlgorithmGui("Greedy Nearest Any", &dcon),
+		AlgorithmGui("Greedy Nearest Radnomized", &gcon),
 		AlgorithmGui("Greedy Nearest Weighted", &wcon),
 		AlgorithmGui("Randomized", &rcon),
 	};

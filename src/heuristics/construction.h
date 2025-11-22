@@ -4,40 +4,28 @@
 #include <set>
 #include <vector>
 #include <unordered_set>
+#include <random>
 
-#include "../core/instance.h"
-#include "../core/solution.h"
-#include "../core/algorithm.h"
-#include "../util/canvas.h"
+#include "core/instance.h"
+#include "core/solution.h"
+#include "core/algorithm.h"
+#include "core/intermediary.h"
+#include "util/canvas.h"
 
-
-struct ConstructionHeuristic : public Algorithm
+struct GreedyConstruction : public Algorithm
 {
-	struct Driver
-	{
-		int id;
-		dist_t time = 0;
-		int load = 0;
-		std::set<CustomerRequest*> loaded_requests;
-		std::vector<Node*> path;
-
-		Driver(int id = 0) : id(id) {}
-
-		void visit(Node* node, Instance& instance);
-		bool fits(Node* node, Instance& instance) const;
-	};
+	using Driver = Driver;
 	struct State
 	{
 		size_t step;
 		bool done;
 		size_t accepted_requests, served_requests;
-		std::multimap<dist_t, ConstructionHeuristic::Driver> busy_drivers;
-		std::vector<ConstructionHeuristic::Driver> finished_drivers;
+		std::multimap<dist_t, GreedyConstruction::Driver> busy_drivers;
+		std::vector<GreedyConstruction::Driver> finished_drivers;
 		std::unordered_set<Node*> unvisited_pickups;
 	};
 	struct Metrics : SolutionMetrics
 	{
-		size_t step;
 		size_t accepted_requests, served_requests;
 		std::vector<int> driver_loads;
 	};
@@ -46,7 +34,7 @@ struct ConstructionHeuristic : public Algorithm
 	State state;
 	Metrics metrics;
 
-	ConstructionHeuristic(Instance* instance);
+	GreedyConstruction(Instance* instance);
 
 	Solution get_current_solution() override;
 	bool done() override;
@@ -57,7 +45,7 @@ struct ConstructionHeuristic : public Algorithm
 };
 
 template<>
-inline void draw<ConstructionHeuristic::Metrics>(ConstructionHeuristic::Metrics& drawable)
+inline void draw<GreedyConstruction::Metrics>(GreedyConstruction::Metrics& drawable)
 {
 	SolutionMetrics& base = drawable;
 	draw(base);
@@ -71,23 +59,34 @@ inline void draw<ConstructionHeuristic::Metrics>(ConstructionHeuristic::Metrics&
 }
 
 
-struct RandomConstruction : public ConstructionHeuristic
+struct RandomConstruction : public GreedyConstruction
 {
 	RandomConstruction(Instance* instance)
-		: ConstructionHeuristic(instance) {}
+		: GreedyConstruction(instance) {}
 
 	size_t step() override;
 };
 
-struct GreedyNearestAny : public ConstructionHeuristic
+struct GreedyNearestAny : public GreedyConstruction
 {
 	GreedyNearestAny(Instance* instance)
-		: ConstructionHeuristic(instance) {}
+		: GreedyConstruction(instance) {}
 
 	size_t step() override;
 };
 
-struct GreedyNearestWeighted : public ConstructionHeuristic
+struct GreedyRandomizedClosest : public GreedyConstruction
+{
+	int candidates_count = 3;
+
+	GreedyRandomizedClosest(Instance* instance)
+		: GreedyConstruction(instance) {}
+
+	size_t step() override;
+	void draw() override;
+};
+
+struct GreedyNearestWeighted : public GreedyConstruction
 {
 	float mean_distance_;
 	float dropoff_bias_ = 1.5f;
