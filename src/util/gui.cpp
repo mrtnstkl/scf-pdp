@@ -1,5 +1,8 @@
 #include "util/gui.h"
 
+#include <variant>
+#include <functional>
+
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
@@ -14,6 +17,8 @@
 #pragma comment(lib, "legacy_stdio_definitions")
 #endif
 
+#include "core/algorithm.h"
+#include "gui.h"
 
 static void glfw_error_callback(int error, const char* description)
 {
@@ -22,23 +27,34 @@ static void glfw_error_callback(int error, const char* description)
 
 void Gui::draw_elements()
 {
-	static ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
-
 	const ImGuiViewport* viewport = ImGui::GetMainViewport();
-	ImGui::SetNextWindowPos(viewport->Pos);
-	ImGui::SetNextWindowSize(viewport->Size);
-	ImGui::SetNextWindowBgAlpha(1.f);
-	if (ImGui::Begin("Main Window", nullptr, flags))
+	auto pos = viewport->Pos;
+	auto size = viewport->Size;
+	const auto win_width = windows_.size() > 1 ? size.x / windows_.size() : size.x;
+	size.x = win_width;
+	for (Window& window : windows_)
 	{
-		for (GuiElement* element : elements_)
+		ImGui::SetNextWindowPos(pos);
+		ImGui::SetNextWindowSize(size);
+		ImGui::SetNextWindowBgAlpha(1.f);
+		ImGui::Begin(window.name, nullptr, window.flags | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
+		pos.x += win_width;
+
+		for (size_t i = 0; i < window.elements.size(); i++)
 		{
+			if (std::holds_alternative<std::function<void()>>(window.elements.at(i)))
+			{
+				std::get<std::function<void()>>(window.elements.at(i))();
+				continue;
+			}
+			GuiElement* element = std::get<GuiElement*>(window.elements.at(i));
 			ImGui::PushID(element);
 			element->draw();
 			ImGui::PopID();
 		}
-		elements_.clear();
+		ImGui::End();
 	}
-	ImGui::End();
+	windows_.clear();
 
 	static bool show_demo_window = false;
 	if (show_demo_window) ImGui::ShowDemoWindow(&show_demo_window);
@@ -106,6 +122,11 @@ bool Gui::init(const char* title, int width, int height)
 	// Setup Platform/Renderer backends
 	ImGui_ImplGlfw_InitForOpenGL(window_, true);
 	ImGui_ImplOpenGL3_Init(glsl_version);
+
+	main_window_.name = "Main Window";
+	//main_window_.flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
+	main_window_.flags = ImGuiWindowFlags_None;
+
 	return true;
 }
 
@@ -144,12 +165,30 @@ void Gui::update()
 
 void Gui::push_element(GuiElement* element)
 {
-	elements_.push_back(element);
+	if (windows_.empty())
+		windows_.emplace_back(main_window_);
+	windows_.back().elements.push_back(element);
+}
+
+
+void Gui::push_element(std::function<void()> element)
+{
+	if (windows_.empty())
+		windows_.emplace_back(main_window_);
+	windows_.back().elements.push_back(element);
+}
+
+void Gui::push_window(const char* name)
+{
+	Window new_window;
+	new_window.name = name;
+	new_window.flags = ImGuiWindowFlags_None;
+	windows_.emplace_back(new_window);
 }
 
 bool Gui::should_close() const
 {
-    return should_close_;
+	return should_close_;
 }
 
 void Gui::close()

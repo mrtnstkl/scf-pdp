@@ -14,6 +14,14 @@ struct Route
 	uint64_t total_distance;
 };
 
+struct SolutionMetrics
+{
+	size_t route_count;
+	float total_cost;
+	float fairness;
+	bool valid;
+};
+
 struct Solution
 {
 	Instance* instance;
@@ -36,6 +44,8 @@ struct Solution
 
 	float calculate_cost() const;
 
+	void calculate_metrics(SolutionMetrics& metrics) const;
+
 	/** 
 	 * @brief Validate the solution against instance constraints
 	 * 
@@ -50,3 +60,14 @@ struct Solution
 
 	void write_to_file(const char* filename, const char* comment = "solution") const;
 };
+
+
+#include "imgui.h"
+template<>
+inline void draw<SolutionMetrics>(SolutionMetrics& drawable)
+{
+	ImGui::Text("Route Count: %zu", drawable.route_count);
+	ImGui::Text("Total Cost: %.2f", drawable.total_cost);
+	ImGui::Text("Fairness: %.4f", drawable.fairness);
+	ImGui::Text("Valid: %s", drawable.valid ? "Yes" : "No");
+}

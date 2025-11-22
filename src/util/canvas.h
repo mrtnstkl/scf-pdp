@@ -65,7 +65,8 @@ struct Canvas : public GuiElement
 	Color bg_color = COLOR_WHITE;
 	float stroke_width = 1.0f;
 	using Element = std::variant<Line, Circle>;
-	std::vector<Element> elements = {};
+	using DrawList = std::vector<Element>;
+	DrawList elements = {};
 	void clear();
 	void add(const Element& element);
 	std::pair<int, int> get_max_extent() const;

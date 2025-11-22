@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <unordered_set>
 
+
 Solution::Solution(Instance* instance, bool init)
 	: instance(instance)
 {
@@ -51,6 +52,14 @@ float Solution::calculate_cost() const
 	for (const auto& route : routes)
 		route_sum += route.total_distance;
 	return route_sum + instance->fairness * (1.f - calculate_jain_fairness());
+}
+
+void Solution::calculate_metrics(SolutionMetrics& metrics) const
+{
+	metrics.route_count = routes.size();
+	metrics.total_cost = calculate_cost();
+	metrics.fairness = calculate_jain_fairness();
+	metrics.valid = validate();
 }
 
 bool Solution::validate() const

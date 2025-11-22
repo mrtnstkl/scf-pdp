@@ -7,18 +7,12 @@
 
 #include "../core/instance.h"
 #include "../core/solution.h"
+#include "../core/algorithm.h"
 #include "../util/canvas.h"
 
 
-class ConstructionHeuristic : public GuiElement
+struct ConstructionHeuristic : public Algorithm
 {
-protected:
-	Instance* instance_;
-	size_t step_ = 0;
-	bool done_ = false;
-	bool record_history_ = true;
-	std::vector<Solution> history_;
-
 	struct Driver
 	{
 		int id;
@@ -32,49 +26,74 @@ protected:
 		void visit(Node* node, Instance& instance);
 		bool fits(Node* node, Instance& instance) const;
 	};
-
-	std::multimap<dist_t, Driver> busy_drivers_;
-	std::vector<Driver> finished_drivers_;
-	std::unordered_set<Node*> unvisited_pickups_;
-	size_t accepted_requests_ = 0;
-	size_t served_requests_ = 0;
-
-	struct
+	struct State
 	{
-		const char* name_ = "Base Construction Heuristic";
-		int solution_index_ = 0;
-		Canvas canvas_;
-	} gui;
+		size_t step;
+		bool done;
+		size_t accepted_requests, served_requests;
+		std::multimap<dist_t, ConstructionHeuristic::Driver> busy_drivers;
+		std::vector<ConstructionHeuristic::Driver> finished_drivers;
+		std::unordered_set<Node*> unvisited_pickups;
+	};
+	struct Metrics : SolutionMetrics
+	{
+		size_t step;
+		size_t accepted_requests, served_requests;
+		std::vector<int> driver_loads;
+	};
 
-	void reset();
+	Instance* instance;
+	State state;
+	Metrics metrics;
 
-	virtual void step() = 0;
+	ConstructionHeuristic(Instance* instance);
 
-public:
-	ConstructionHeuristic(Instance* instance, const char* name);
+	Solution get_current_solution() override;
+	bool done() override;
+	void draw() override { };
+	virtual void reset();
 
-	void compute_next();
-	void run_to_completion();
-
-	Solution get_current_solution();
-	bool done() const;
-
-	void draw() override;
+	virtual size_t step() = 0;
 };
 
-
-class RandomConstruction : public ConstructionHeuristic
+template<>
+inline void draw<ConstructionHeuristic::Metrics>(ConstructionHeuristic::Metrics& drawable)
 {
-	void step() override;
-public:
+	SolutionMetrics& base = drawable;
+	draw(base);
+	ImGui::Text("Step: %zu", drawable.step);
+	ImGui::Text("Accepted Requests: %zu", drawable.accepted_requests);
+	ImGui::Text("Served Requests: %zu", drawable.served_requests);
+	for (size_t i = 0; i < drawable.driver_loads.size(); ++i)
+	{
+		ImGui::Text("Driver %zu Load: %d", i, drawable.driver_loads[i]);
+	}
+}
+
+
+struct RandomConstruction : public ConstructionHeuristic
+{
 	RandomConstruction(Instance* instance)
-		: ConstructionHeuristic(instance, "Random Construction Heuristic") {}
+		: ConstructionHeuristic(instance) {}
+
+	size_t step() override;
 };
 
-class DeterministicConstructionHeuristic : public ConstructionHeuristic
+struct GreedyNearestAny : public ConstructionHeuristic
 {
-	void step() override;
-public:
-	DeterministicConstructionHeuristic(Instance* instance)
-		: ConstructionHeuristic(instance, "Deterministic Construction Heuristic") {}
+	GreedyNearestAny(Instance* instance)
+		: ConstructionHeuristic(instance) {}
+
+	size_t step() override;
+};
+
+struct GreedyNearestWeighted : public ConstructionHeuristic
+{
+	float mean_distance_;
+	float dropoff_bias_ = 1.5f;
+	
+	GreedyNearestWeighted(Instance* instance);
+
+	size_t step() override;
+	void draw() override;
 };
