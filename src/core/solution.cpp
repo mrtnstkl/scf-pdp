@@ -4,6 +4,131 @@
 #include <fstream>
 #include <stdexcept>
 #include <unordered_set>
+#include <numeric>
+
+
+DeltaCalculator::DeltaCalculator(Instance* instance)
+	: instance(instance), route_sum(0), route_squares(instance->vehicle_count, 0)
+{
+}
+void DeltaCalculator::add_stop(int route_id, const Node* prev_node, const Node* new_node)
+{
+	if (prev_node == nullptr)
+	{
+		// this is the first stop of the route, so use depot distance (twice)
+		const auto d_depot = instance->get_distance(new_node);
+		route_sum += d_depot + d_depot;
+		route_squares[route_id] = d_depot * d_depot + d_depot * d_depot;
+		return;
+	}
+	// we are inserting at the end, so we:
+	// 1. add our own depot distance
+	const auto d_depot_new = instance->get_distance(new_node);
+	route_sum += d_depot_new;
+	route_squares[route_id] += d_depot_new * d_depot_new;
+	// 2. subtract the old depot distance
+	const auto d_depot_old = instance->get_distance(prev_node);
+	route_sum -= d_depot_old;
+	route_squares[route_id] -= d_depot_old * d_depot_old;
+	// 3. add the distance to the previous node
+	const auto d_prev = instance->get_distance(prev_node, new_node);
+	route_sum += d_prev;
+	route_squares[route_id] += d_prev * d_prev;
+}
+
+void DeltaCalculator::add_stop(int route_id, const Node* prev_node, const Node* new_node, const Node* next_node)
+{
+	if (next_node == nullptr)
+	{
+		add_stop(route_id, prev_node, new_node);
+		return;
+	}
+	if (prev_node == nullptr)
+	{
+		// we are adding something at the beginning
+		// this is equivalent to adding to the end, we just use next in place of prev
+		add_stop(route_id, next_node, new_node);
+		return;
+	}
+	// we are inserting between two nodes, so we:
+	// 1. add the distance to the first
+	const auto d_prev = instance->get_distance(new_node, prev_node);
+	route_sum += d_prev;
+	route_squares[route_id] += d_prev * d_prev;
+	// 2. add the distance to the second
+	const auto d_next = instance->get_distance(new_node, next_node);
+	route_sum += d_next;
+	route_squares[route_id] += d_next * d_next;
+	// 3. remove the distance between the two
+	const auto d_prev_next = instance->get_distance(prev_node, next_node);
+	route_sum += d_prev_next;
+	route_squares[route_id] += d_prev_next * d_prev_next;
+}
+
+void DeltaCalculator::remove_stop(int route_id, const Node* prev_node, const Node* old_node)
+{
+	if (prev_node == nullptr)
+	{
+		// we are removing the only node in the route
+		route_sum = 0;
+		route_squares[route_id] = 0;
+		return;
+	}
+	// we are removing the last node in the route, so we:
+	// 1. remove our own depot distance
+	const auto d_depot_old = instance->get_distance(old_node);
+	route_sum -= d_depot_old;
+	route_squares[route_id] -= d_depot_old * d_depot_old;
+	// 2. add the old depot distance
+	const auto d_depot_new = instance->get_distance(prev_node);
+	route_sum += d_depot_new;
+	route_squares[route_id] += d_depot_new * d_depot_new;
+	// 3. remove the distance to the previous node
+	const auto d_prev = instance->get_distance(prev_node, old_node);
+	route_sum -= d_prev;
+	route_squares[route_id] -= d_prev * d_prev;
+}
+
+void DeltaCalculator::remove_stop(int route_id, const Node* prev_node, const Node* old_node, const Node* next_node)
+{
+	if (next_node == nullptr)
+	{
+		remove_stop(route_id, prev_node, old_node);
+		return;
+	}
+	if (prev_node == nullptr)
+	{
+		// we are removing the first node in the route
+		remove_stop(route_id, next_node, old_node);
+		return;
+	}
+	// we are removing a node between two nodes, so we:
+	// 1. remove the distance to the first
+	const auto d_prev = instance->get_distance(old_node, prev_node);
+	route_sum -= d_prev;
+	route_squares[route_id] -= d_prev * d_prev;
+	// 2. remove the distance to the second
+	const auto d_next = instance->get_distance(old_node, next_node);
+	route_sum -= d_next;
+	route_squares[route_id] -= d_next * d_next;
+	// 3. add the distance between the two
+	const auto d_prev_next = instance->get_distance(prev_node, next_node);
+	route_sum += d_prev_next;
+	route_squares[route_id] += d_prev_next * d_prev_next;
+}
+
+float DeltaCalculator::fairness() const
+{
+	return route_sum * route_sum / float(
+		instance->vehicle_count *
+		std::accumulate(route_squares.begin(), route_squares.end(), uint64_t(0))
+	);
+}
+
+float DeltaCalculator::cost() const
+{
+	return route_sum + instance->fairness * (1.f - fairness());
+}
 
 
 Solution::Solution(Instance* instance, bool init)

@@ -22,6 +22,21 @@ struct SolutionMetrics
 	bool valid;
 };
 
+struct DeltaCalculator
+{
+	Instance* instance;
+	uint64_t route_sum;
+	std::vector<uint64_t> route_squares;
+
+	DeltaCalculator(Instance* instance);
+	void add_stop(int route_id, const Node* prev_node, const Node* new_node);
+	void add_stop(int route_id, const Node* prev_node, const Node* new_node, const Node* next_node);
+	void remove_stop(int route_id, const Node* prev_node, const Node* old_node);
+	void remove_stop(int route_id, const Node* prev_node, const Node* old_node, const Node* next_node);
+	float fairness() const;
+	float cost() const;
+};
+
 struct Solution
 {
 	Instance* instance;
