@@ -146,10 +146,10 @@ void Instance::draw(Canvas& canvas, bool draw_links) const
 		}
 	}
 	for (const auto& node : pickups)
-		canvas.add(Circle{ node.location.x, node.location.y, .5f, COLOR_CYAN, true });
+		canvas.add(Circle{ static_cast<float>(node.location.x), static_cast<float>(node.location.y), .5f, COLOR_CYAN, true });
 	for (const auto& node : dropoffs)
-		canvas.add(Circle{ node.location.x, node.location.y, .5f, COLOR_ORANGE, true });
-	canvas.add(Circle{ depot.x, depot.y, .7f, COLOR_MAGENTA, true });
+		canvas.add(Circle{ static_cast<float>(node.location.x), static_cast<float>(node.location.y), .5f, COLOR_ORANGE, true });
+	canvas.add(Circle{ static_cast<float>(depot.x), static_cast<float>(depot.y), .7f, COLOR_MAGENTA, true });
 }
 
 void Instance::print() const

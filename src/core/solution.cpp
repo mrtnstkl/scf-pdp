@@ -258,14 +258,20 @@ void Solution::draw(Canvas& canvas) const
 	{
 		Color c = Color::random();
 		if (route.nodes.empty()) continue;
-		canvas.add(Line{ route.depot.x, route.depot.y, route.nodes.front()->location.x, route.nodes.front()->location.y, c });
+		canvas.add(Line{ 
+			float(route.depot.x), float(route.depot.y), 
+			float(route.nodes.front()->location.x), float(route.nodes.front()->location.y), c });
 		for (auto it = route.nodes.begin(); it != std::prev(route.nodes.end()); ++it)
 		{
 			auto& current = *it;
 			auto& next = *std::next(it);
-			canvas.add(Line{ current->location.x, current->location.y, next->location.x, next->location.y, c });
+			canvas.add(
+				Line{ float(current->location.x), float(current->location.y), 
+				float(next->location.x), float(next->location.y), c });
 		}
-		canvas.add(Line{ route.nodes.back()->location.x, route.nodes.back()->location.y, route.depot.x, route.depot.y, c });
+		canvas.add(
+			Line{ float(route.nodes.back()->location.x), float(route.nodes.back()->location.y), 
+				float(route.depot.x), float(route.depot.y), c });
 	}
 }
 
