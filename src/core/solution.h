@@ -23,21 +23,6 @@ struct SolutionMetrics
 	bool valid;
 };
 
-struct DeltaCalculator
-{
-	Instance* instance;
-	uint64_t route_sum;
-	std::vector<uint64_t> route_squares;
-
-	DeltaCalculator(Instance* instance);
-	void add_stop(int route_id, const Node* prev_node, const Node* new_node);
-	void add_stop(int route_id, const Node* prev_node, const Node* new_node, const Node* next_node);
-	void remove_stop(int route_id, const Node* prev_node, const Node* old_node);
-	void remove_stop(int route_id, const Node* prev_node, const Node* old_node, const Node* next_node);
-	float fairness() const;
-	float cost() const;
-	float cost(float fairness) const;
-};
 
 struct Solution
 {
@@ -76,6 +61,24 @@ struct Solution
 	void draw(Canvas& canvas) const;
 
 	void write_to_file(const char* filename, const char* comment = "solution") const;
+};
+
+
+struct DeltaCalculator
+{
+	Instance* instance;
+	uint64_t route_sum;
+	std::vector<uint64_t> route_squares;
+
+	DeltaCalculator(Instance* instance);
+	DeltaCalculator(Instance* instance, const Solution& solution);
+	void add_stop(int route_id, const Node* prev_node, const Node* new_node);
+	void add_stop(int route_id, const Node* prev_node, const Node* new_node, const Node* next_node);
+	void remove_stop(int route_id, const Node* prev_node, const Node* old_node);
+	void remove_stop(int route_id, const Node* prev_node, const Node* old_node, const Node* next_node);
+	float fairness() const;
+	float cost() const;
+	float cost(float fairness) const;
 };
 
 
