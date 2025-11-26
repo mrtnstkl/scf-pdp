@@ -20,6 +20,8 @@ public:
 	virtual bool has_next() = 0;
 };
 
+
+// Neighborhood 1: Move Request Within Route
 class MoveRequestWithinRouteNeighborhood : public Neighborhood
 {
 	size_t node_count_;
@@ -61,4 +63,59 @@ struct LocalSearch : public Algorithm
 	void draw() override;
 
 
+};
+
+// Neighborhood 2: Swap Requests Between Vehicles
+
+class SwapRequestsBetweenVehiclesNeighborhood : public Neighborhood
+{
+
+	size_t node_count_;
+	bool done_;
+	Solution current_solution_;
+	DeltaCalculator delta_;
+
+	std::queue<std::pair<CustomerRequest*, int>> request_queue_;
+
+	// store for each driver the current load at any given point in time
+	std::vector<std::list<int>> driver_loads_;
+
+public:
+	SwapRequestsBetweenVehiclesNeighborhood(const Solution& initial_solution, Instance* instance); 
+	float next() override;
+	Solution get() override;
+	bool has_next() override;
+};
+
+// Neighborhood 3: Move Request Between Vehicles
+
+class MoveRequestBetweenVehiclesNeighborhood : public Neighborhood
+{
+	size_t node_count_;
+	bool done_;
+	Solution current_solution_;
+	DeltaCalculator delta_;
+	int vehicle_capacity_;
+	
+	std::queue<std::pair<CustomerRequest*, int>> request_queue_;
+
+	// store for each driver the current load at any given point in time
+	std::vector<std::list<int>> driver_loads_;
+
+public:
+	MoveRequestBetweenVehiclesNeighborhood(const Solution& initial_solution, Instance* instance); 
+	float next() override;
+	Solution get() override;
+	bool has_next() override;
+
+
+	// Helper function to check load feasibility of an insertion by
+	// simulating the load along the route and checking capacity constraints
+	bool is_feasible_insertion(
+	    const Route& route,
+	    Node* pickup,
+	    Node* dropoff,
+	    size_t pos_pick,
+	    size_t pos_drop,
+	    int vehicle_capacity);
 };
