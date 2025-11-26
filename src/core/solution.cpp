@@ -303,3 +303,44 @@ float DeltaCalculator::cost(float fairness) const
 {
 	return route_sum + instance->fairness * (1.f - fairness);
 }
+
+
+bool is_feasible_insertion(
+    const Route& route,
+    Node* pickup,
+    Node* dropoff,
+    size_t pos_pick,
+    size_t pos_drop,
+    int vehicle_capacity)
+{
+    int load = 0;
+    size_t index = 0;
+
+    auto it = route.nodes.begin();
+    while (true)
+    {
+        if (index == pos_pick) {
+            load += pickup->capacity_change;
+            if (load < 0 || load > vehicle_capacity)
+                return false;
+        }
+
+        if (index == pos_drop) {
+            load += dropoff->capacity_change;
+            if (load < 0 || load > vehicle_capacity)
+                return false;
+        }
+
+        if (it == route.nodes.end())
+            break;
+
+        load += (*it)->capacity_change;
+        if (load < 0 || load > vehicle_capacity)
+            return false;
+
+        ++it;
+        ++index;
+    }
+
+    return true;
+}

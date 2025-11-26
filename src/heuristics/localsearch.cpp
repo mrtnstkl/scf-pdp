@@ -1,4 +1,6 @@
 #include "localsearch.h"
+#include "core/solution.h"
+
 
 Neighborhood::Neighborhood(const Solution& initial_solution)
 	: initial_solution_(initial_solution)
@@ -154,51 +156,4 @@ float MoveRequestBetweenVehiclesNeighborhood::next()
 
 	return delta_.cost();
 
-}
-
-bool MoveRequestBetweenVehiclesNeighborhood::is_feasible_insertion(
-    const Route& route,
-    Node* pickup,
-    Node* dropoff,
-    size_t pos_pick,
-    size_t pos_drop,
-    int vehicle_capacity
-	)
-{
-
-    int load = 0;
-    size_t index = 0;
-
-    auto iterator = route.nodes.begin();
-    while (true)
-    {
-        // Insert pickup
-        if (index == pos_pick)
-        {
-            load += pickup->capacity_change;
-            if (load < 0 || load > vehicle_capacity)
-                return false;
-        }
-
-        // Insert dropoff
-        if (index == pos_drop)
-        {
-            load += dropoff->capacity_change;
-            if (load < 0 || load > vehicle_capacity)
-                return false;
-        }
-
-        // Process real route node
-        if (iterator == route.nodes.end())
-            break;
-
-        load += (*iterator)->capacity_change;
-        if (load < 0 || load > vehicle_capacity)
-            return false;
-
-        ++iterator;
-        ++index;
-    }
-
-    return true;
 }

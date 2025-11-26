@@ -91,3 +91,14 @@ inline void draw<SolutionMetrics>(SolutionMetrics& drawable)
 	ImGui::Text("Fairness: %.4f", drawable.fairness);
 	ImGui::Text("Valid: %s", drawable.valid ? "Yes" : "No");
 }
+
+// Helper function to check load feasibility of an insertion by
+// simulating the load along the route and checking capacity constraints
+bool is_feasible_insertion(
+    const Route& route,
+    Node* pickup,
+    Node* dropoff,
+    size_t pos_pick,
+    size_t pos_drop,
+    int vehicle_capacity);
+

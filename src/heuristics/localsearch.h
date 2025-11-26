@@ -109,13 +109,5 @@ public:
 	bool has_next() override;
 
 
-	// Helper function to check load feasibility of an insertion by
-	// simulating the load along the route and checking capacity constraints
-	bool is_feasible_insertion(
-	    const Route& route,
-	    Node* pickup,
-	    Node* dropoff,
-	    size_t pos_pick,
-	    size_t pos_drop,
-	    int vehicle_capacity);
+
 };
