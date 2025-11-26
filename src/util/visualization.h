@@ -180,6 +180,14 @@ inline void AlgorithmVisualizer<A>::draw()
 			0, nullptr, FLT_MAX, FLT_MAX, ImVec2(0,150));
 		ImGui::TreePop();
 	}
+
+	// Save Button
+	if (ImGui::Button("Save Current Canvas"))
+	{
+		std::string filename = std::string("solutions/current_solution") + ".sln";
+		algorithm_->get_current_solution().write_to_file(filename.c_str());
+		feedback_ = { "Saved canvas to " + filename, ImVec4(0.f, 1.f, 0.f, 1.f) };
+	}
 }
 
 
