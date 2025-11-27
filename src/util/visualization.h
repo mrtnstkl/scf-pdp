@@ -117,18 +117,31 @@ inline void AlgorithmVisualizer<A>::draw()
 	// Reset and Free Buttons
 	if (ImGui::Button("Reset"))
 		reset();
-	if (ImGui::SameLine(), ImGui::Button("Free"))
+	ImGui::SameLine();
+	if (ImGui::Button("Free"))
 		{ reset(); metrics_ = {}; canvas_states_ = {}; }
 
 	// Step Controls
 	ImGui::BeginDisabled(algorithm_->done());
 	if (ImGui::Button("Advance"))
+	{
 		step();
-	if (ImGui::SameLine(), ImGui::Button("Run to End"))
-		{ run_to_end(); display(); }
+		display();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Run to End"))
+	{
+		run_to_end();
+		display();
+	}
 	ImGui::EndDisabled();
-	if (ImGui::SameLine(), ImGui::Button("Re-Run"))
-		{ reset(); run_to_end(); display(); }
+	ImGui::SameLine();
+	if (ImGui::Button("Re-Run"))
+	{
+		reset();
+		run_to_end();
+		display();
+	}
 	
 	// Recording Level
 	static const char* levels[] = { "None", "Metrics", "Canvas" };

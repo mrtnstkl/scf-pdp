@@ -1,173 +1,154 @@
 #include "heuristics/localsearch.h"
 #include <fstream>
-#include <iostream>
 #include <sstream>
+#include <iostream>
 
-LocalSearch::LocalSearch(Instance *instance)
-    : instance(instance), current_solution_(instance, false), finished(false) {}
+LocalSearch::LocalSearch(Instance* instance)
+    : instance(instance),
+      current_solution_(instance)
+{
+    reset();
+}
 
 void LocalSearch::reset()
 {
+    // Start from an empty solution (or however you want)
     current_solution_ = Solution(instance);
     current_solution_.calculate_metrics(metrics);
+    metrics.step = 0;
 
-    // Start algorithm logic at 0, but keep external load counter
-    metrics.step = external_step_counter_++;     
     finished = false;
 
-    // rebuild neighbourhood normally
+    // Build selected neighbourhood from this starting solution
     switch (selected_neighborhood_) {
         case NeighborhoodType::MoveWithinRoute:
-            neighborhood_ = std::make_unique<MoveRequestWithinRouteNeighborhood>(current_solution_, instance);
+            neighborhood_ = std::make_unique<MoveRequestWithinRouteNeighborhood>(
+                current_solution_, instance);
             break;
         //case NeighborhoodType::SwapBetweenVehicles:
-        //    neighborhood_ = std::make_unique<SwapRequestsBetweenVehiclesNeighborhood>(current_solution_, instance);
+        //    neighborhood_ = std::make_unique<SwapRequestsBetweenVehiclesNeighborhood>(
+        //        current_solution_, instance);
         //    break;
         case NeighborhoodType::MoveBetweenVehicles:
-            neighborhood_ = std::make_unique<MoveRequestBetweenVehiclesNeighborhood>(current_solution_, instance);
+            neighborhood_ = std::make_unique<MoveRequestBetweenVehiclesNeighborhood>(
+                current_solution_, instance);
             break;
     }
 }
-
 
 size_t LocalSearch::step()
 {
     if (finished)
         return metrics.step;
 
-    if (!neighborhood_ || !neighborhood_->has_next())
-    {
+    if (!neighborhood_ || !neighborhood_->has_next()) {
         finished = true;
         return metrics.step;
     }
 
-    // Apply one move
+    // Apply one neighbourhood move
     neighborhood_->next();
     current_solution_ = neighborhood_->get();
 
-    // Update metrics
+    // Update metrics for visualiser
     current_solution_.calculate_metrics(metrics);
-
-    // 🔥 Give every step a NEW step ID
-    metrics.step = external_step_counter_++;
+    ++metrics.step;
 
     return metrics.step;
 }
 
+bool LocalSearch::done()
+{
+    return finished;
+}
 
-bool LocalSearch::done() { return finished; }
-
-Solution LocalSearch::get_current_solution() { return current_solution_; }
-
-void LocalSearch::draw() {
-    if (ImGui::Button("Load current solution")) {
-        load_solution_from_file("solutions/current_solution.sln");
-
-        metrics.step = external_step_counter_++;
-
-        finished = false;
-
-        // Rebuild neighbourhood using the loaded solution
-        switch (selected_neighborhood_) {
-            case NeighborhoodType::MoveWithinRoute:
-                neighborhood_ = std::make_unique<MoveRequestWithinRouteNeighborhood>(
-                    current_solution_, instance);
-                break;
-
-            //case NeighborhoodType::SwapBetweenVehicles:
-            //    neighborhood_ = std::make_unique<SwapRequestsBetweenVehiclesNeighborhood>(
-            //        current_solution_, instance);
-            //    break;
-
-            case NeighborhoodType::MoveBetweenVehicles:
-                neighborhood_ = std::make_unique<MoveRequestBetweenVehiclesNeighborhood>(
-                    current_solution_, instance);
-                break;
-        }
-    }
-
-        ImGui::Text("Select Neighborhood:");
-    if (ImGui::RadioButton("Move Within Route",
-        selected_neighborhood_ == NeighborhoodType::MoveWithinRoute))
-    {
-        selected_neighborhood_ = NeighborhoodType::MoveWithinRoute;
-        reset();
-    }
-    if (ImGui::RadioButton("Swap Between Vehicles",
-        selected_neighborhood_ == NeighborhoodType::SwapBetweenVehicles))
-    {
-        selected_neighborhood_ = NeighborhoodType::SwapBetweenVehicles;
-        reset();
-    }
-    if (ImGui::RadioButton("Move Between Vehicles",
-        selected_neighborhood_ == NeighborhoodType::MoveBetweenVehicles))
-    {
-        selected_neighborhood_ = NeighborhoodType::MoveBetweenVehicles;
-        reset();
-    }
-
-
+Solution LocalSearch::get_current_solution()
+{
+    return current_solution_;
 }
 
 void LocalSearch::load_solution_from_file(const std::string& path)
 {
     std::ifstream in(path);
-    if (!in)
-    {
+    if (!in) {
         std::cerr << "Failed to open solution file: " << path << std::endl;
         return;
     }
 
     std::string header;
     std::getline(in, header);
-
-    if (header != "solution")
-    {
+    if (header != "solution") {
         std::cerr << "Invalid solution header in " << path << std::endl;
         return;
     }
 
-    // Build a fresh solution
     current_solution_ = Solution(instance);
 
     std::string line;
-    while (std::getline(in, line))
-    {
+    while (std::getline(in, line)) {
         if (line.empty())
             continue;
 
         std::istringstream ss(line);
-
         Route route;
         route.depot = instance->depot;
 
         int idx1based;
-        while (ss >> idx1based)
-        {
-            // Convert 1-based index to internal 0-based index
-            int idx0based = idx1based - 1;
-
-            // Validate
-            if (idx0based < 0 || idx0based >= (int)instance->node_count)
-            {
-                std::cerr << "Invalid node index " 
-                          << idx1based 
-                          << " in solution file (valid: 1–"
-                          << instance->node_count << ")."
-                          << std::endl;
+        while (ss >> idx1based) {
+            int idx0 = idx1based - 1;
+            if (idx0 < 0 || idx0 >= (int)instance->node_count) {
+                std::cerr << "Invalid node index " << idx1based
+                          << " in solution file." << std::endl;
                 continue;
             }
-
-            // Retrieve node
-            Node* node = &instance->nodes[idx0based];
+            Node* node = &instance->nodes[idx0];
             route.nodes.push_back(node);
         }
 
-        // Compute route distance and store
         route.total_distance = current_solution_.calculate_route_time(route);
         current_solution_.routes.push_back(std::move(route));
     }
 
     current_solution_.calculate_metrics(metrics);
-    metrics.step = external_step_counter_++;
+    metrics.step = 0;      // loaded state = step 0
+    finished = false;
+
+    // Rebuild neighbourhood from loaded solution
+    switch (selected_neighborhood_) {
+        case NeighborhoodType::MoveWithinRoute:
+            neighborhood_ = std::make_unique<MoveRequestWithinRouteNeighborhood>(
+                current_solution_, instance);
+            break;
+        //case NeighborhoodType::SwapBetweenVehicles:
+        //    neighborhood_ = std::make_unique<SwapRequestsBetweenVehiclesNeighborhood>(
+        //        current_solution_, instance);
+        //    break;
+        case NeighborhoodType::MoveBetweenVehicles:
+            neighborhood_ = std::make_unique<MoveRequestBetweenVehiclesNeighborhood>(
+                current_solution_, instance);
+            break;
+    }
+}
+
+void LocalSearch::draw()
+{
+    // Neighbourhood selection UI
+    const char* names[] = {
+        "Move Within Route",
+        //"Swap Between Vehicles",
+        "Move Between Vehicles"
+    };
+    int current = static_cast<int>(selected_neighborhood_);
+    if (ImGui::Combo("Neighborhood", &current, names, IM_ARRAYSIZE(names))) {
+        selected_neighborhood_ = static_cast<NeighborhoodType>(current);
+        reset();
+    }
+
+    if (ImGui::Button("Load current solution")) {
+        load_solution_from_file("solutions/current_solution.sln");
+    }
+
+    ImGui::Text("Step: %zu", metrics.step);
+    ImGui::Text("Total Cost: %.2f", metrics.total_cost);
+    ImGui::Text("Fairness: %.4f", metrics.fairness);
 }
