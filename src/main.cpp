@@ -39,7 +39,7 @@ int main(int argc, char* argv[])
 		AlgorithmGui("Greedy Nearest Weighted", &wcon),
 		AlgorithmGui("Randomized", &rcon),
 		AlgorithmGui("Beam Search", &bsearch),
-		//AlgorithmGui("Local Search", &lsearch)
+		AlgorithmGui("Local Search", &lsearch)
 	};
 
 	Gui gui;
