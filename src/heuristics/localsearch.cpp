@@ -6,35 +6,107 @@
 LocalSearch::LocalSearch(Instance *instance)
     : instance(instance), current_solution_(instance, false), finished(false) {}
 
-void LocalSearch::reset() {
-  current_solution_ = Solution(instance, false);
-  finished = false;
+void LocalSearch::reset()
+{
+    current_solution_ = Solution(instance);
+    current_solution_.calculate_metrics(metrics);
 
-  current_solution_.calculate_metrics(metrics);
-  metrics.step = 0;
+    // Start algorithm logic at 0, but keep external load counter
+    metrics.step = external_step_counter_++;     
+    finished = false;
+
+    // rebuild neighbourhood normally
+    switch (selected_neighborhood_) {
+        case NeighborhoodType::MoveWithinRoute:
+            neighborhood_ = std::make_unique<MoveRequestWithinRouteNeighborhood>(current_solution_, instance);
+            break;
+        //case NeighborhoodType::SwapBetweenVehicles:
+        //    neighborhood_ = std::make_unique<SwapRequestsBetweenVehiclesNeighborhood>(current_solution_, instance);
+        //    break;
+        case NeighborhoodType::MoveBetweenVehicles:
+            neighborhood_ = std::make_unique<MoveRequestBetweenVehiclesNeighborhood>(current_solution_, instance);
+            break;
+    }
 }
 
-size_t LocalSearch::step() {
-  if (finished)
+
+size_t LocalSearch::step()
+{
+    if (finished)
+        return metrics.step;
+
+    if (!neighborhood_ || !neighborhood_->has_next())
+    {
+        finished = true;
+        return metrics.step;
+    }
+
+    // Apply one move
+    neighborhood_->next();
+    current_solution_ = neighborhood_->get();
+
+    // Update metrics
+    current_solution_.calculate_metrics(metrics);
+
+    // 🔥 Give every step a NEW step ID
+    metrics.step = external_step_counter_++;
+
     return metrics.step;
-
-  // For now: do nothing
-  finished = true;
-
-  current_solution_.calculate_metrics(metrics);
-  metrics.step++;
-
-  return metrics.step;
 }
+
 
 bool LocalSearch::done() { return finished; }
 
 Solution LocalSearch::get_current_solution() { return current_solution_; }
 
 void LocalSearch::draw() {
-  if (ImGui::Button("Load current solution")) {
-    load_solution_from_file("solutions/current_solution.sln");
-  }
+    if (ImGui::Button("Load current solution")) {
+        load_solution_from_file("solutions/current_solution.sln");
+
+        metrics.step = external_step_counter_++;
+
+        finished = false;
+
+        // Rebuild neighbourhood using the loaded solution
+        switch (selected_neighborhood_) {
+            case NeighborhoodType::MoveWithinRoute:
+                neighborhood_ = std::make_unique<MoveRequestWithinRouteNeighborhood>(
+                    current_solution_, instance);
+                break;
+
+            //case NeighborhoodType::SwapBetweenVehicles:
+            //    neighborhood_ = std::make_unique<SwapRequestsBetweenVehiclesNeighborhood>(
+            //        current_solution_, instance);
+            //    break;
+
+            case NeighborhoodType::MoveBetweenVehicles:
+                neighborhood_ = std::make_unique<MoveRequestBetweenVehiclesNeighborhood>(
+                    current_solution_, instance);
+                break;
+        }
+    }
+
+        ImGui::Text("Select Neighborhood:");
+    if (ImGui::RadioButton("Move Within Route",
+        selected_neighborhood_ == NeighborhoodType::MoveWithinRoute))
+    {
+        selected_neighborhood_ = NeighborhoodType::MoveWithinRoute;
+        reset();
+    }
+    if (ImGui::RadioButton("Swap Between Vehicles",
+        selected_neighborhood_ == NeighborhoodType::SwapBetweenVehicles))
+    {
+        selected_neighborhood_ = NeighborhoodType::SwapBetweenVehicles;
+        reset();
+    }
+    if (ImGui::RadioButton("Move Between Vehicles",
+        selected_neighborhood_ == NeighborhoodType::MoveBetweenVehicles))
+    {
+        selected_neighborhood_ = NeighborhoodType::MoveBetweenVehicles;
+        reset();
+    }
+
+
 }
 
 void LocalSearch::load_solution_from_file(const std::string& path)
@@ -97,5 +169,5 @@ void LocalSearch::load_solution_from_file(const std::string& path)
     }
 
     current_solution_.calculate_metrics(metrics);
-    metrics.step++;
+    metrics.step = external_step_counter_++;
 }
