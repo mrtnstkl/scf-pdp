@@ -1,8 +1,9 @@
 #pragma once
 
-#include <vector>
-#include <queue>
 #include <list>
+#include <queue>
+#include <vector>
+
 
 #include "core/algorithm.h"
 #include "core/instance.h"
@@ -13,8 +14,9 @@ class Neighborhood
 {
 protected:
 	Solution initial_solution_;
+
 public:
-	Neighborhood(const Solution& initial_solution); 
+	Neighborhood(const Solution& initial_solution);
 	virtual float next() = 0;
 	virtual Solution get() = 0;
 	virtual bool has_next() = 0;
@@ -29,12 +31,17 @@ class MoveRequestWithinRouteNeighborhood : public Neighborhood
 	Solution current_solution_;
 	DeltaCalculator delta_;
 
-	enum Moving { NEW_REQUEST, PICKUP, DROPOFF } current_move_strategy_;
+	enum Moving
+	{
+		NEW_REQUEST,
+		PICKUP,
+		DROPOFF
+	} current_move_strategy_;
 
 	// the queue contains requests that shall be processed in order
 	// along with the request, the driver id that has the request loaded is stored
 	std::queue<std::pair<CustomerRequest*, int>> request_queue_;
-	
+
 	size_t pickup_index_, dropoff_index_;
 
 	// store for each driver the current load at any given point in time
@@ -42,7 +49,7 @@ class MoveRequestWithinRouteNeighborhood : public Neighborhood
 
 
 public:
-	MoveRequestWithinRouteNeighborhood(const Solution& initial_solution, Instance* instance); 
+	MoveRequestWithinRouteNeighborhood(const Solution& initial_solution, Instance* instance);
 	float next() override;
 	Solution get() override;
 	bool has_next() override;
@@ -65,7 +72,7 @@ class SwapRequestsBetweenVehiclesNeighborhood : public Neighborhood
 	std::vector<std::list<int>> driver_loads_;
 
 public:
-	SwapRequestsBetweenVehiclesNeighborhood(const Solution& initial_solution, Instance* instance); 
+	SwapRequestsBetweenVehiclesNeighborhood(const Solution& initial_solution, Instance* instance);
 	float next() override;
 	Solution get() override;
 	bool has_next() override;
@@ -77,21 +84,29 @@ class MoveRequestBetweenVehiclesNeighborhood : public Neighborhood
 {
 	size_t node_count_;
 	bool done_;
-	Solution current_solution_;
-	DeltaCalculator delta_;
+
+	// OLD:
+	// Solution current_solution_;
+	// DeltaCalculator delta_;
+
+	// NEW:
+	Solution base_solution_; // fixed base
+	Solution candidate_solution_; // last generated neighbour
+
+	Instance* instance_; // to recompute metrics / use helper functions
 	int vehicle_capacity_;
-	
+
 	std::queue<std::pair<CustomerRequest*, int>> request_queue_;
 
 	// store for each driver the current load at any given point in time
 	std::vector<std::list<int>> driver_loads_;
 
 public:
-	MoveRequestBetweenVehiclesNeighborhood(const Solution& initial_solution, Instance* instance); 
+	MoveRequestBetweenVehiclesNeighborhood(const Solution& initial_solution, Instance* instance);
+	// find next possible swap and return its cost if it were a solution
 	float next() override;
+	// deliver solution back if I like the solution
 	Solution get() override;
+	// say if has more requests to process
 	bool has_next() override;
-
-
-
 };
