@@ -231,7 +231,7 @@ void DeltaCalculator::add_stop(int route_id, const Node* prev_node, const Node* 
 	// 3. remove the distance between the two
 	const auto d_prev_next = instance->get_distance(prev_node, next_node);
 	route_sum += d_prev_next;
-	route_squares[route_id] += d_prev_next * d_prev_next;
+	route_squares[route_id] -= d_prev_next * d_prev_next;
 }
 
 void DeltaCalculator::remove_stop(int route_id, const Node* prev_node, const Node* old_node)
