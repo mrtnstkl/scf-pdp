@@ -1,18 +1,20 @@
 #pragma once
 
-#include <map>
 #include <iostream>
+#include <map>
 #include <memory>
 
+
 #include "core/algorithm.h"
-#include "util/gui.h"
 #include "util/canvas.h"
+#include "util/gui.h"
 #include "util/timer.hpp"
+
 
 #include "imgui.h"
 
-template<typename A>
-class AlgorithmVisualizer : public GuiElement 
+template <typename A>
+class AlgorithmVisualizer : public GuiElement
 {
 	A* algorithm_;
 	size_t position_ = 0;
@@ -20,7 +22,12 @@ class AlgorithmVisualizer : public GuiElement
 	std::map<size_t, typename A::Metrics> metrics_;
 	std::map<size_t, Canvas::DrawList> canvas_states_;
 	Canvas canvas_;
-	enum RecordingLevel { NONE, METRICS, CANVAS } recording_level_ = CANVAS;
+	enum RecordingLevel
+	{
+		NONE,
+		METRICS,
+		CANVAS
+	} recording_level_ = CANVAS;
 	std::pair<std::string, ImVec4> feedback_ = {"", ImVec4(1.f, 1.f, 1.f, 1.f)};
 
 	void record_snapshot(const Solution& soln, typename A::Metrics& metrics, RecordingLevel level)
@@ -53,9 +60,11 @@ class AlgorithmGui : public GuiElement
 	std::unique_ptr<GuiElement> visualizer_;
 
 public:
-	template<typename A>
+	template <typename A>
 	AlgorithmGui(const char* name, A* algo)
-		: name_(name), algorithm_(algo), visualizer_(std::make_unique<AlgorithmVisualizer<A>>(algo)) {}
+		: name_(name), algorithm_(algo), visualizer_(std::make_unique<AlgorithmVisualizer<A>>(algo))
+	{
+	}
 	AlgorithmGui(const AlgorithmGui&) = delete; // cant copy unique_ptr
 	AlgorithmGui& operator=(const AlgorithmGui&) = delete;
 
@@ -65,8 +74,7 @@ public:
 };
 
 
-
-template<typename A>
+template <typename A>
 AlgorithmVisualizer<A>::AlgorithmVisualizer(A* algorithm)
 	: algorithm_(algorithm)
 {
@@ -80,34 +88,40 @@ AlgorithmVisualizer<A>::AlgorithmVisualizer(A* algorithm)
 	canvas_.stroke_width = .2f;
 }
 
-template<typename A>
+template <typename A>
 inline void AlgorithmVisualizer<A>::draw()
 {
-	const auto reset = [&]() {
+	const auto reset = [&]()
+	{
 		position_ = max_position_ = 0;
 		algorithm_->reset();
 		metrics_.clear();
 		canvas_states_.clear();
 	};
-	const auto step = [&]() {
+	const auto step = [&]()
+	{
 		algorithm_->step();
 		record_snapshot(algorithm_->get_current_solution(), algorithm_->metrics, recording_level_);
 	};
-	const auto run_to_end = [&]() {
+	const auto run_to_end = [&]()
+	{
 		Timer timer;
 		if (recording_level_ == NONE)
 		{
-			while (!algorithm_->done()) algorithm_->step();
-			record_snapshot(algorithm_->get_current_solution(), algorithm_->metrics, recording_level_);
+			while (!algorithm_->done())
+				algorithm_->step();
+			record_snapshot(
+				algorithm_->get_current_solution(), algorithm_->metrics, recording_level_);
 		}
 		else
 		{
 			while (!algorithm_->done())
 				step();
 		}
-		feedback_ = { "Completed in " + timer.get<std::string>(), ImVec4(0.f, 1.f, 0.f, 1.f) };
+		feedback_ = {"Completed in " + timer.get<std::string>(), ImVec4(0.f, 1.f, 0.f, 1.f)};
 	};
-	const auto display = [&]() {
+	const auto display = [&]()
+	{
 		record_snapshot(algorithm_->get_current_solution(), algorithm_->metrics, CANVAS);
 		if (canvas_states_.contains(position_))
 			canvas_.elements = canvas_states_.at(position_);
@@ -118,20 +132,31 @@ inline void AlgorithmVisualizer<A>::draw()
 	if (ImGui::Button("Reset"))
 		reset();
 	if (ImGui::SameLine(), ImGui::Button("Free"))
-		{ reset(); metrics_ = {}; canvas_states_ = {}; }
+	{
+		reset();
+		metrics_ = {};
+		canvas_states_ = {};
+	}
 
 	// Step Controls
 	ImGui::BeginDisabled(algorithm_->done());
 	if (ImGui::Button("Advance"))
 		step();
 	if (ImGui::SameLine(), ImGui::Button("Run to End"))
-		{ run_to_end(); display(); }
+	{
+		run_to_end();
+		display();
+	}
 	ImGui::EndDisabled();
 	if (ImGui::SameLine(), ImGui::Button("Re-Run"))
-		{ reset(); run_to_end(); display(); }
-	
+	{
+		reset();
+		run_to_end();
+		display();
+	}
+
 	// Recording Level
-	static const char* levels[] = { "None", "Metrics", "Canvas" };
+	static const char* levels[] = {"None", "Metrics", "Canvas"};
 	static int level_i = 2;
 	const char* current_level = (level_i >= 0 && level_i <= 2) ? levels[level_i] : "Unknown";
 	if (ImGui::SliderInt("Recording Level", &level_i, 0, 2, current_level))
@@ -147,10 +172,11 @@ inline void AlgorithmVisualizer<A>::draw()
 
 	// Step Slider and Display
 	ImGui::Text("Current Step: %zu/%zu", position_, max_position_);
-	if (ImGui::SliderInt("Step", reinterpret_cast<int*>(&position_), 0, static_cast<int>(max_position_)))
+	if (ImGui::SliderInt(
+			"Step", reinterpret_cast<int*>(&position_), 0, static_cast<int>(max_position_)))
 	{
 		if (canvas_states_.contains(position_))
-		canvas_.elements = canvas_states_.at(position_);
+			canvas_.elements = canvas_states_.at(position_);
 	}
 	// Canvas and Metrics Display
 	if (ImGui::SetNextItemOpen(true, ImGuiCond_Once), ImGui::TreeNode("Graph"))
@@ -175,11 +201,15 @@ inline void AlgorithmVisualizer<A>::draw()
 			auto it = costs.find(idx);
 			return (it != costs.end()) ? it->second.total_cost : 0.f;
 		};
-		ImGui::PlotHistogram("Cost over Time", values_getter,
-			reinterpret_cast<void*>(&metrics_), static_cast<int>(metrics_.size()),
-			0, nullptr, FLT_MAX, FLT_MAX, ImVec2(0,150));
+		ImGui::PlotHistogram("Cost over Time", values_getter, reinterpret_cast<void*>(&metrics_),
+			static_cast<int>(metrics_.size()), 0, nullptr, FLT_MAX, FLT_MAX, ImVec2(0, 150));
 		ImGui::TreePop();
 	}
+
+	if (ImGui::Button("Save Current Canvas"))
+	{
+		std::string filename = std::string("solutions/current_solution") + ".sln";
+		algorithm_->get_current_solution().write_to_file(filename.c_str());
+		feedback_ = {"Saved canvas to " + filename, ImVec4(0.f, 1.f, 0.f, 1.f)};
+	}
 }
-
-

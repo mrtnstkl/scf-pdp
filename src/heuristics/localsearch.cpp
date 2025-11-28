@@ -1,51 +1,100 @@
 #include "localsearch.h"
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include "core/solution.h"
 
-Neighborhood::Neighborhood(const Solution& initial_solution)
-	: initial_solution_(initial_solution)
+
+LocalSearch::LocalSearch(Instance* instance)
+    : instance(instance), current_solution_(instance)
 {
+    reset();
 }
 
-MoveRequestWithinRouteNeighborhood::MoveRequestWithinRouteNeighborhood(const Solution& initial_solution, Instance* instance)
-	: Neighborhood(initial_solution), delta_(instance, initial_solution), current_solution_(initial_solution)
+void LocalSearch::reset()
 {
-	node_count_ = instance->node_count;
-	done_ = false;
-	current_move_strategy_ = NEW_REQUEST;
-	// initialize the request queue
-	for (size_t driver_id = 0; driver_id < initial_solution_.routes.size(); ++driver_id)
+    metrics = Metrics();
+    current_solution_ = Solution(instance);
+}
+
+size_t LocalSearch::step()
+{
+    // Placeholder: no actual local search implemented yet
+    return metrics.step;
+}
+
+void LocalSearch::draw() {
+  if (ImGui::Button("Load current solution")) {
+    load_solution_from_file("solutions/current_solution.sln");
+  }
+}
+
+Solution LocalSearch::get_current_solution()
+{
+    return current_solution_;
+}
+
+bool LocalSearch::done()
+{
+    return false;
+}
+
+void LocalSearch::load_solution_from_file(const std::string& path)
+{
+	std::ifstream in(path);
+	if (!in)
 	{
-		const Route& route = initial_solution_.routes[driver_id];
-		for (const Node* node : route.nodes)
-		{
-			if (node->is_pickup())
-				continue; // only process each request once
-			CustomerRequest& request = instance->get_request_from_node(node);
-			request_queue_.emplace(&request, driver_id);
-		}
+		std::cerr << "Failed to open solution file: " << path << std::endl;
+		return;
 	}
-}
 
-float MoveRequestWithinRouteNeighborhood::next()
-{
-	bool new_found = false;
-	while (!request_queue_.empty() && !new_found)
+	std::string header;
+	std::getline(in, header);
+
+	if (header != "solution")
 	{
-		if (current_move_strategy_ == NEW_REQUEST)
-		{
-			// get a new request from the queue
-			// move it to the very start
-		}
-
-
+		std::cerr << "Invalid solution header in " << path << std::endl;
+		return;
 	}
 
-	return delta_.cost();
-}
-Solution MoveRequestWithinRouteNeighborhood::get()
-{
-	return current_solution_;
-}
-bool MoveRequestWithinRouteNeighborhood::has_next()
-{
-	return !done_;
+	// Build a fresh solution
+	current_solution_ = Solution(instance);
+
+	std::string line;
+	while (std::getline(in, line))
+	{
+		if (line.empty())
+			continue;
+
+		std::istringstream ss(line);
+
+		Route route;
+		route.depot = instance->depot;
+
+		int idx1based;
+		while (ss >> idx1based)
+		{
+			// Convert 1-based index to internal 0-based index
+			int idx0based = idx1based - 1;
+
+			// Validate
+			if (idx0based < 0 || idx0based >= (int)instance->node_count)
+			{
+				std::cerr << "Invalid node index " << idx1based << " in solution file (valid: 1–"
+						  << instance->node_count << ")." << std::endl;
+				continue;
+			}
+
+			// Retrieve node
+			Node* node = &instance->nodes[idx0based];
+			route.nodes.push_back(node);
+		}
+
+		// Compute route distance and store
+		route.total_distance = current_solution_.calculate_route_time(route);
+		current_solution_.routes.push_back(std::move(route));
+	}
+
+	current_solution_.calculate_metrics(metrics);
+	metrics.step++;
 }
