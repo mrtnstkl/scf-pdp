@@ -1,43 +1,230 @@
 #include "localsearch.h"
+#include <algorithm>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <sstream>
 #include "core/solution.h"
 
+enum Neighbourhood
+{
+	RELOCATE,
+	SWAP,
+	TWO_OPT,
+	COUNT
+};
+
 
 LocalSearch::LocalSearch(Instance* instance)
-    : instance(instance), current_solution_(instance)
+	: instance(instance), current_solution_(instance)
 {
-    reset();
+	reset();
 }
 
 void LocalSearch::reset()
 {
-    metrics = Metrics();
-    current_solution_ = Solution(instance);
+	metrics = Metrics();
+	current_solution_ = Solution(instance);
 }
 
 size_t LocalSearch::step()
 {
-    // Placeholder: no actual local search implemented yet
-    return metrics.step;
+	if (k_ >= static_cast<size_t>(Neighbourhood::COUNT))
+		k_ = 0;
+
+	Solution candidate = current_solution_;
+	bool success = false;
+
+	switch (static_cast<Neighbourhood>(k_))
+	{
+	case Neighbourhood::RELOCATE:
+		success = apply_relocate(candidate);
+		break;
+
+	case Neighbourhood::SWAP:
+		success = apply_swap(candidate);
+		break;
+
+	case Neighbourhood::TWO_OPT:
+		success = apply_two_opt(candidate);
+		break;
+
+	default:
+		break;
+	}
+
+	if (success && candidate.calculate_cost() < current_solution_.calculate_cost())
+	{
+		current_solution_ = std::move(candidate);
+		k_ = 0; // restart VND
+		improved_ = true;
+	}
+	else
+	{
+		++k_; // next neighbourhood
+		improved_ = false;
+	}
+
+	current_solution_.calculate_metrics(metrics);
+	++metrics.step;
+
+	return metrics.step;
 }
 
-void LocalSearch::draw() {
-  if (ImGui::Button("Load current solution")) {
-    load_solution_from_file("solutions/current_solution.sln");
-  }
-}
-
-Solution LocalSearch::get_current_solution()
+void LocalSearch::draw()
 {
-    return current_solution_;
+	if (ImGui::Button("Load current solution"))
+	{
+		load_solution_from_file("solutions/current_solution.sln");
+	}
+
+	if (ImGui::Button("VND step"))
+	{
+		step();
+	}
+
+	if (ImGui::Button("Run VND to local optimum"))
+	{
+		size_t guard = 0;
+		do
+		{
+			step();
+		}
+		while (improved_ && guard++ < 10'000);
+	}
 }
 
-bool LocalSearch::done()
+bool LocalSearch::apply_relocate(Solution& sol)
 {
-    return false;
+	// Works with containers that only provide bidirectional iterators (e.g., std::list)
+	for (auto& route : sol.routes)
+	{
+		// iterate by index but use std::next to obtain iterators
+		for (size_t i = 0; i < route.nodes.size(); ++i)
+		{
+			auto it_i = std::next(route.nodes.begin(),
+				static_cast<
+					typename std::iterator_traits<decltype(route.nodes.begin())>::difference_type>(
+					i));
+			Node* moved = *it_i;
+
+			// remove node
+			route.nodes.erase(it_i);
+
+			for (auto& target_route : sol.routes)
+			{
+				for (size_t j = 0; j <= target_route.nodes.size(); ++j)
+				{
+					auto insert_pos = std::next(target_route.nodes.begin(),
+						static_cast<typename std::iterator_traits<
+							decltype(target_route.nodes.begin())>::difference_type>(j));
+					target_route.nodes.insert(insert_pos, moved);
+
+					auto new_cost = sol.calculate_route_time(target_route);
+
+					if (new_cost + route.total_distance < sol.calculate_cost())
+					{
+						route.total_distance = sol.calculate_route_time(route);
+						target_route.total_distance = new_cost;
+						sol.calculate_cost();
+						return true;
+					}
+
+					// undo insert
+					auto erase_pos = std::next(target_route.nodes.begin(),
+						static_cast<typename std::iterator_traits<
+							decltype(target_route.nodes.begin())>::difference_type>(j));
+					target_route.nodes.erase(erase_pos);
+				}
+			}
+
+			// undo erase: insert back at original position
+			auto insert_back = std::next(route.nodes.begin(),
+				static_cast<
+					typename std::iterator_traits<decltype(route.nodes.begin())>::difference_type>(
+					i));
+			route.nodes.insert(insert_back, moved);
+		}
+	}
+
+	return false;
 }
+
+bool LocalSearch::apply_swap(Solution& sol)
+{
+	// Use iterator-aware swaps so this works with non-random-access containers
+	for (auto& r1 : sol.routes)
+	{
+		for (auto& r2 : sol.routes)
+		{
+			for (size_t i = 0; i < r1.nodes.size(); ++i)
+			{
+				auto it1 = std::next(r1.nodes.begin(),
+					static_cast<
+						typename std::iterator_traits<decltype(r1.nodes.begin())>::difference_type>(
+						i));
+				for (size_t j = 0; j < r2.nodes.size(); ++j)
+				{
+					auto it2 = std::next(r2.nodes.begin(),
+						static_cast<typename std::iterator_traits<
+							decltype(r2.nodes.begin())>::difference_type>(j));
+					std::iter_swap(it1, it2);
+
+					auto new1 = sol.calculate_route_time(r1);
+					auto new2 = sol.calculate_route_time(r2);
+
+					if (new1 + new2 < r1.total_distance + r2.total_distance)
+					{
+						r1.total_distance = new1;
+						r2.total_distance = new2;
+						sol.calculate_cost();
+						return true;
+					}
+
+					std::iter_swap(it1, it2); // rollback
+				}
+			}
+		}
+	}
+	return false;
+}
+
+bool LocalSearch::apply_two_opt(Solution& sol)
+{
+	for (auto& route : sol.routes)
+	{
+		for (size_t i = 0; i + 1 < route.nodes.size(); ++i)
+		{
+			for (size_t j = i + 1; j < route.nodes.size(); ++j)
+			{
+				auto first = std::next(route.nodes.begin(),
+					static_cast<typename std::iterator_traits<
+						decltype(route.nodes.begin())>::difference_type>(i));
+				auto last = std::next(route.nodes.begin(),
+					static_cast<typename std::iterator_traits<
+						decltype(route.nodes.begin())>::difference_type>(j + 1));
+
+				std::reverse(first, last);
+
+				auto new_cost = sol.calculate_route_time(route);
+
+				if (new_cost < route.total_distance)
+				{
+					route.total_distance = new_cost;
+					sol.calculate_cost();
+					return true;
+				}
+
+				std::reverse(first, last);
+			}
+		}
+	}
+	return false;
+}
+
+Solution LocalSearch::get_current_solution() { return current_solution_; }
+
+bool LocalSearch::done() { return k_ >= static_cast<size_t>(Neighbourhood::COUNT); }
 
 void LocalSearch::load_solution_from_file(const std::string& path)
 {
@@ -74,7 +261,6 @@ void LocalSearch::load_solution_from_file(const std::string& path)
 		int idx1based;
 		while (ss >> idx1based)
 		{
-			// Convert 1-based index to internal 0-based index
 			int idx0based = idx1based - 1;
 
 			// Validate
