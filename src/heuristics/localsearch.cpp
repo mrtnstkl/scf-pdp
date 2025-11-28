@@ -4,6 +4,7 @@
 #include <iostream>
 #include <iterator>
 #include <sstream>
+#include <unordered_set>
 #include "core/solution.h"
 
 enum Neighbourhood
@@ -53,7 +54,8 @@ size_t LocalSearch::step()
 		break;
 	}
 
-	if (success && candidate.calculate_cost() < current_solution_.calculate_cost())
+	if (success && is_solution_feasible(candidate)
+		&& candidate.calculate_cost() < current_solution_.calculate_cost())
 	{
 		current_solution_ = std::move(candidate);
 		k_ = 0; // restart VND
@@ -120,15 +122,19 @@ bool LocalSearch::apply_relocate(Solution& sol)
 							decltype(target_route.nodes.begin())>::difference_type>(j));
 					target_route.nodes.insert(insert_pos, moved);
 
-					auto new_cost = sol.calculate_route_time(target_route);
-
-					if (new_cost + route.total_distance < sol.calculate_cost())
+					if (is_route_feasible(route) && is_route_feasible(target_route))
 					{
-						route.total_distance = sol.calculate_route_time(route);
-						target_route.total_distance = new_cost;
-						sol.calculate_cost();
-						return true;
+						auto new_cost = sol.calculate_route_time(target_route);
+
+						if (new_cost + route.total_distance < sol.calculate_cost())
+						{
+							route.total_distance = sol.calculate_route_time(route);
+							target_route.total_distance = new_cost;
+							sol.calculate_cost();
+							return true;
+						}
 					}
+
 
 					// undo insert
 					auto erase_pos = std::next(target_route.nodes.begin(),
@@ -170,16 +176,20 @@ bool LocalSearch::apply_swap(Solution& sol)
 							decltype(r2.nodes.begin())>::difference_type>(j));
 					std::iter_swap(it1, it2);
 
-					auto new1 = sol.calculate_route_time(r1);
-					auto new2 = sol.calculate_route_time(r2);
-
-					if (new1 + new2 < r1.total_distance + r2.total_distance)
+					if (is_route_feasible(r1) && is_route_feasible(r2))
 					{
-						r1.total_distance = new1;
-						r2.total_distance = new2;
-						sol.calculate_cost();
-						return true;
+						auto new1 = sol.calculate_route_time(r1);
+						auto new2 = sol.calculate_route_time(r2);
+
+						if (new1 + new2 < r1.total_distance + r2.total_distance)
+						{
+							r1.total_distance = new1;
+							r2.total_distance = new2;
+							sol.calculate_cost();
+							return true;
+						}
 					}
+
 
 					std::iter_swap(it1, it2); // rollback
 				}
@@ -208,7 +218,7 @@ bool LocalSearch::apply_two_opt(Solution& sol)
 
 				auto new_cost = sol.calculate_route_time(route);
 
-				if (new_cost < route.total_distance)
+				if (is_route_feasible(route) && new_cost < route.total_distance)
 				{
 					route.total_distance = new_cost;
 					sol.calculate_cost();
@@ -221,6 +231,50 @@ bool LocalSearch::apply_two_opt(Solution& sol)
 	}
 	return false;
 }
+
+bool LocalSearch::is_route_feasible(const Route& route) const
+{
+	int load = 0;
+
+	std::unordered_set<int> seen_requests;
+
+	for (Node* node : route.nodes)
+	{
+		const auto& req = instance->get_request_from_node(node);
+
+		load += node->capacity_change;
+
+		if (load < 0)
+			return false;
+
+		if (load > instance->vehicle_capacity)
+			return false;
+
+		// pickup
+		if (node->capacity_change > 0)
+		{
+			seen_requests.insert(req.id);
+		}
+		else // dropoff
+		{
+			if (!seen_requests.contains(req.id))
+				return false; // drop before pickup
+		}
+	}
+
+	return true;
+}
+
+bool LocalSearch::is_solution_feasible(const Solution& sol) const
+{
+	for (const auto& r : sol.routes)
+	{
+		if (!is_route_feasible(r))
+			return false;
+	}
+	return true;
+}
+
 
 Solution LocalSearch::get_current_solution() { return current_solution_; }
 

@@ -4,7 +4,7 @@
 #include <queue>
 #include <vector>
 #include "neighborhood.h"
-#include "string"
+#include <string>
 
 
 #include "core/algorithm.h"
@@ -24,7 +24,7 @@ struct LocalSearch : public Algorithm
 
 	Solution get_current_solution() override;
 
-	//draw laod button
+	// draw laod button
 	void draw() override;
 
 	void load_solution_from_file(const std::string& path);
@@ -49,5 +49,7 @@ private:
 	bool apply_relocate(Solution& sol);
 	bool apply_swap(Solution& sol);
 	bool apply_two_opt(Solution& sol);
-	
+
+	bool is_route_feasible(const Route& route) const;
+	bool is_solution_feasible(const Solution& sol) const;
 };
