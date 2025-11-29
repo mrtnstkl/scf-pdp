@@ -69,35 +69,39 @@ bool Solution::validate() const
 	if (routes.size() != instance->vehicle_count)
 		return false; // unexpected route count
 
-	std::unordered_set<CustomerRequest*> all_served;
-	for (const Route& route : routes)
+	std::unordered_set<const Node*> visited_nodes;
+	std::unordered_map<CustomerRequest*, size_t> open_requests;
+
+	for (size_t r = 0; r < routes.size() ; ++r)
 	{
-		std::unordered_set<CustomerRequest*> current_requests;
 		int current_load = 0;
-		for (const Node* node : route.nodes)
+		for (const Node* node : routes[r].nodes)
 		{
+			if (!visited_nodes.insert(node).second)
+				return false; // node already visited
+
 			CustomerRequest* cr = &instance->get_request_from_node(node);
 			if (node->is_pickup())
 			{
-				if (all_served.contains(cr))
-					return false; // already served
-				current_requests.insert(cr);
-				all_served.insert(cr);
+				open_requests.insert({cr, r});
 			}
 			else
 			{
-				if (!current_requests.contains(cr))
+				const auto cr_it = open_requests.find(cr);
+				if (cr_it == open_requests.end())
 					return false; // dropoff without pickup
-				current_requests.erase(cr);
+				if (cr_it->second != r)
+					return false; // dropoff in different route than pickup
+				open_requests.erase(cr_it);
 			}
 			current_load += node->capacity_change;
 			if (current_load < 0 || current_load > instance->vehicle_capacity)
 				return false; // capacity violation
 		}
-		if (!current_requests.empty())
+		if (!open_requests.empty())
 			return false; // not all pickups were dropped off
 	}
-	if (all_served.size() < instance->min_requests)
+	if (visited_nodes.size() / 2 < instance->min_requests)
 		return false; // less customer requests have been fullfilled than required
 	return true;
 }
