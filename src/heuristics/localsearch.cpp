@@ -88,10 +88,9 @@ void LocalSearch::draw()
 
 bool LocalSearch::apply_relocate(Solution& sol)
 {
-	// Works with containers that only provide bidirectional iterators (e.g., std::list)
 	for (auto& route : sol.routes)
 	{
-		// iterate by index but use std::next to obtain iterators
+		// iterate by index
 		for (size_t i = 0; i < route.nodes.size(); ++i)
 		{
 			auto it_i = std::next(route.nodes.begin(),
@@ -100,7 +99,7 @@ bool LocalSearch::apply_relocate(Solution& sol)
 					i));
 			Node* moved = *it_i;
 
-			// remove node
+			// rm node
 			route.nodes.erase(it_i);
 
 			for (auto& target_route : sol.routes)
@@ -148,7 +147,6 @@ bool LocalSearch::apply_relocate(Solution& sol)
 
 bool LocalSearch::apply_swap(Solution& sol)
 {
-	// Use iterator-aware swaps so this works with non-random-access containers
 	for (auto& r1 : sol.routes)
 	{
 		for (auto& r2 : sol.routes)
@@ -181,7 +179,7 @@ bool LocalSearch::apply_swap(Solution& sol)
 					}
 
 
-					std::iter_swap(it1, it2); // rollback
+					std::iter_swap(it1, it2);
 				}
 			}
 		}
