@@ -1,12 +1,6 @@
 #pragma once
 
-#include <list>
-#include <queue>
-#include <vector>
-#include "neighborhood.h"
 #include <string>
-
-
 #include "core/algorithm.h"
 #include "core/instance.h"
 #include "core/solution.h"
