@@ -26,6 +26,7 @@ struct LocalSearch : public Algorithm
 	using Metrics = SolutionMetrics;
 	Metrics metrics;
 
+	Solution initial_solution_;
 	Solution current_solution_;
 
 	LocalSearch(Instance* instance);

@@ -17,21 +17,23 @@ enum Neighbourhood
 
 
 LocalSearch::LocalSearch(Instance* instance)
-	: instance(instance), current_solution_(instance)
+	: instance(instance), initial_solution_(instance), current_solution_(instance)
 {
 	reset();
 }
 
 void LocalSearch::reset()
 {
-	metrics = Metrics();
-	current_solution_ = Solution(instance);
+	current_solution_ = initial_solution_;
+	current_solution_.calculate_metrics(metrics);
+	metrics.step = 0;
+	k_ = 0;
 }
 
 size_t LocalSearch::step()
 {
 	if (k_ >= static_cast<size_t>(Neighbourhood::COUNT))
-		k_ = 0;
+		return metrics.step; // done
 
 	Solution candidate = current_solution_;
 	bool success = false;
@@ -78,11 +80,6 @@ void LocalSearch::draw()
 	if (ImGui::Button("Load current solution"))
 	{
 		load_solution_from_file("solutions/current_solution.sln");
-	}
-
-	if (ImGui::Button("VND step"))
-	{
-		step();
 	}
 }
 
@@ -287,7 +284,7 @@ void LocalSearch::load_solution_from_file(const std::string& path)
 	}
 
 	// Build a fresh solution
-	current_solution_ = Solution(instance);
+	initial_solution_ = Solution(instance);
 
 	std::string line;
 	while (std::getline(in, line))
@@ -320,9 +317,10 @@ void LocalSearch::load_solution_from_file(const std::string& path)
 
 		// Compute route distance and store
 		route.total_distance = current_solution_.calculate_route_time(route);
-		current_solution_.routes.push_back(std::move(route));
+		initial_solution_.routes.push_back(std::move(route));
 	}
 
+	current_solution_ = initial_solution_;
 	current_solution_.calculate_metrics(metrics);
 	metrics.step++;
 }
