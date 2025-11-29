@@ -84,16 +84,6 @@ void LocalSearch::draw()
 	{
 		step();
 	}
-
-	if (ImGui::Button("Run VND to local optimum"))
-	{
-		size_t guard = 0;
-		do
-		{
-			step();
-		}
-		while (improved_ && guard++ < 10'000);
-	}
 }
 
 bool LocalSearch::apply_relocate(Solution& sol)
