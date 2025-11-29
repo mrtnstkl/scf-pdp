@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
@@ -164,6 +165,56 @@ void Solution::write_to_file(const char* filename, const char* comment) const
 		file << std::endl;
 	}
 }
+
+Solution Solution::load_from_file(const char* path, Instance* instance)
+{
+	std::ifstream in(path);
+	if (!in)
+	{
+		std::cerr << "Failed to open solution file: " << path << std::endl;
+		throw std::runtime_error("Could not open solution file for reading");
+	}
+
+	std::string header;
+	std::getline(in, header);
+
+	// Build a fresh solution
+	Solution sol(instance);
+
+	std::string line;
+	while (std::getline(in, line))
+	{
+		if (line.empty())
+			continue;
+
+		std::istringstream ss(line);
+
+		Route route;
+		route.depot = instance->depot;
+
+		int idx1based;
+		while (ss >> idx1based)
+		{
+			int idx0based = idx1based - 1;
+
+			// validate
+			if (idx0based < 0 || idx0based >= (int)instance->node_count)
+			{
+				std::cerr << "Invalid node index " << idx1based << " in solution file (valid: 1–"
+						  << instance->node_count << ")." << std::endl;
+				continue;
+			}
+
+			// retrieve node
+			Node* node = &instance->nodes[idx0based];
+			route.nodes.push_back(node);
+		}
+		// compute route distance and store
+		route.total_distance = sol.calculate_route_time(route);
+		sol.routes.push_back(std::move(route));
+	}
+	return sol;
+ }
 
 
 DeltaCalculator::DeltaCalculator(Instance* instance)

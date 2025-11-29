@@ -61,6 +61,8 @@ struct Solution
 	void draw(Canvas& canvas) const;
 
 	void write_to_file(const char* filename, const char* comment = "solution") const;
+
+	static Solution load_from_file(const char* path, Instance* instance);
 };
 
 
