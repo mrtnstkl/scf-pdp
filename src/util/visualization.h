@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -21,7 +22,7 @@ class AlgorithmVisualizer : public GuiElement
 	size_t max_position_ = 0;
 	std::map<size_t, typename A::Metrics> metrics_;
 	std::map<size_t, Canvas::DrawList> canvas_states_;
-	Canvas canvas_;
+	Canvas current_canvas_;
 	enum RecordingLevel
 	{
 		NONE,
@@ -30,21 +31,15 @@ class AlgorithmVisualizer : public GuiElement
 	} recording_level_ = CANVAS;
 	std::pair<std::string, ImVec4> feedback_ = {"", ImVec4(1.f, 1.f, 1.f, 1.f)};
 
-	void record_snapshot(const Solution& soln, typename A::Metrics& metrics, RecordingLevel level)
-	{
-		position_ = metrics.step;
-		max_position_ = std::max(max_position_, position_);
-		if (level >= METRICS)
-		{
-			metrics_[position_] = metrics;
-		}
-		if (level >= CANVAS)
-		{
-			Canvas temp_canvas;
-			soln.draw(temp_canvas);
-			canvas_states_[position_] = temp_canvas.elements;
-		}
-	}
+	/**
+	 * @brief Record a snapshot of the current solution state
+	 *
+	 * @param soln the solution whose current state is to be recorded
+	 * @param metrics the metrics associated with the current state
+	 * @param level the recording level (NONE, METRICS, CANVAS)
+	 */
+	void record_snapshot(
+		const Solution& soln, const typename A::Metrics& metrics, RecordingLevel level);
 
 public:
 	AlgorithmVisualizer(A* algorithm);
@@ -73,24 +68,45 @@ public:
 	GuiElement* get_visualization_gui() { return visualizer_.get(); }
 };
 
+template <typename A>
+void AlgorithmVisualizer<A>::record_snapshot(
+	const Solution& soln, const typename A::Metrics& metrics, RecordingLevel level)
+{
+	position_ = metrics.step;
+	max_position_ = std::max(max_position_, position_);
+	if (level >= METRICS)
+	{
+		metrics_[position_] = metrics;
+	}
+	if (level >= CANVAS)
+	{
+		Canvas temp_canvas;
+		soln.draw(temp_canvas);
+		canvas_states_[position_] = temp_canvas.elements;
+	}
+}
+
 
 template <typename A>
 AlgorithmVisualizer<A>::AlgorithmVisualizer(A* algorithm)
 	: algorithm_(algorithm)
 {
 	const float width_target = 560.f;
-	algorithm->get_current_solution().draw(canvas_);
-	auto [max_x, max_y] = canvas_.get_max_extent();
-	canvas_.scale = width_target / max_x;
-	canvas_.width = width_target;
-	canvas_.height = max_y * canvas_.scale;
-	canvas_.bg_color = COLOR_BLACK;
-	canvas_.stroke_width = .2f;
+	algorithm->get_current_solution().draw(current_canvas_);
+	auto [max_x, max_y] = current_canvas_.get_max_extent();
+	current_canvas_.scale = width_target / max_x;
+	current_canvas_.width = width_target;
+	current_canvas_.height = max_y * current_canvas_.scale;
+	current_canvas_.bg_color = COLOR_BLACK;
+	current_canvas_.stroke_width = .2f;
 }
 
 template <typename A>
 inline void AlgorithmVisualizer<A>::draw()
 {
+	// Helper lambdas
+
+	// reset: reset the algorithm and clear recorded data
 	const auto reset = [&]()
 	{
 		position_ = max_position_ = 0;
@@ -98,11 +114,14 @@ inline void AlgorithmVisualizer<A>::draw()
 		metrics_.clear();
 		canvas_states_.clear();
 	};
+	// step: advance the algorithm by one step and record data
 	const auto step = [&]()
 	{
 		algorithm_->step();
 		record_snapshot(algorithm_->get_current_solution(), algorithm_->metrics, recording_level_);
 	};
+	// run_to_end: run the algorithm until it is done
+	// data is recorded according to the recording level
 	const auto run_to_end = [&]()
 	{
 		Timer timer;
@@ -119,18 +138,18 @@ inline void AlgorithmVisualizer<A>::draw()
 				step();
 		}
 		feedback_ = {"Completed in " + timer.get<std::string>(), ImVec4(0.f, 1.f, 0.f, 1.f)};
-	};
-	const auto display = [&]()
-	{
+		// always record final state and display it
 		record_snapshot(algorithm_->get_current_solution(), algorithm_->metrics, CANVAS);
-		if (canvas_states_.contains(position_))
-			canvas_.elements = canvas_states_.at(position_);
+		if (!canvas_states_.empty())
+			current_canvas_.elements = canvas_states_.rbegin()->second;
 	};
 
 
 	// Reset and Free Buttons
+	// "Reset": resets the algorithm and clears recorded data
 	if (ImGui::Button("Reset"))
 		reset();
+	// "Free": resets and frees up space
 	if (ImGui::SameLine(), ImGui::Button("Free"))
 	{
 		reset();
@@ -140,19 +159,18 @@ inline void AlgorithmVisualizer<A>::draw()
 
 	// Step Controls
 	ImGui::BeginDisabled(algorithm_->done());
+	// "Advance": take one step in the algorithm
 	if (ImGui::Button("Advance"))
 		step();
+	// "Run to End": run the algorithm to completion
 	if (ImGui::SameLine(), ImGui::Button("Run to End"))
-	{
 		run_to_end();
-		display();
-	}
 	ImGui::EndDisabled();
+	// "Re-Run": reset + run to end
 	if (ImGui::SameLine(), ImGui::Button("Re-Run"))
 	{
 		reset();
 		run_to_end();
-		display();
 	}
 
 	// Recording Level
@@ -176,12 +194,12 @@ inline void AlgorithmVisualizer<A>::draw()
 			"Step", reinterpret_cast<int*>(&position_), 0, static_cast<int>(max_position_)))
 	{
 		if (canvas_states_.contains(position_))
-			canvas_.elements = canvas_states_.at(position_);
+			current_canvas_.elements = canvas_states_.at(position_);
 	}
 	// Canvas and Metrics Display
 	if (ImGui::SetNextItemOpen(true, ImGuiCond_Once), ImGui::TreeNode("Graph"))
 	{
-		canvas_.draw();
+		current_canvas_.draw();
 		ImGui::TreePop();
 	}
 	if (ImGui::TreeNode("Metrics"))
@@ -206,10 +224,12 @@ inline void AlgorithmVisualizer<A>::draw()
 		ImGui::TreePop();
 	}
 
-	if (ImGui::Button("Save Current Canvas"))
+	if (ImGui::Button("Save Last Solution"))
 	{
-		std::string filename = std::string("solutions/current_solution") + ".sln";
-		algorithm_->get_current_solution().write_to_file(filename.c_str());
-		feedback_ = {"Saved canvas to " + filename, ImVec4(0.f, 1.f, 0.f, 1.f)};
+		const auto out_dir = std::filesystem::path("solutions");
+		const auto file = (out_dir / "current_solution.sln").string();
+		std::filesystem::create_directories(out_dir);
+		algorithm_->get_current_solution().write_to_file(file.c_str());
+		feedback_ = {"Saved canvas to " + file, ImVec4(0.f, 1.f, 0.f, 1.f)};
 	}
 }
