@@ -97,6 +97,9 @@ public:
 	bool has_next() override;
 };
 
+
+//=============================================================
+
 class MoveRequestToAnotherRouteNeighborhood : public Neighborhood
 {
 	Instance* instance_;
