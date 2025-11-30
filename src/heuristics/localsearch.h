@@ -18,12 +18,13 @@ public:
 	};
 	enum NeighborhoodType : int
 	{
-		MOVE_REQUEST_WITHIN_ROUTE,
+		MOVE_REQUEST_WITHIN_ROUTE = 0,
 		MOVE_REQUEST_TO_ANOTHER_ROUTE,
 		SWAP_REQUESTS_BETWEEN_ROUTES,
+		ENUM_COUNT,
 	};
 
-private:
+protected:
 	Instance* instance_;
 	Solution initial_solution_;
 	Solution current_solution_;

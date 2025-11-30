@@ -33,6 +33,8 @@ size_t LocalSearch::step()
 		neighborhood =
 			std::make_unique<SwapRequestsBetweenRoutesNeighborhood>(current_solution_, instance_);
 		break;
+	default:
+		assert(false && "Unknown neighborhood type");
 	}
 
 

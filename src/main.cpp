@@ -10,6 +10,7 @@
 #include "heuristics/construction.h"
 #include "heuristics/grasp.h"
 #include "heuristics/localsearch.h"
+#include "heuristics/vnd.h"
 #include "util/canvas.h"
 #include "util/visualization.h"
 
@@ -34,6 +35,7 @@ int main(int argc, char* argv[])
 	auto rcon = RandomConstruction(&instance);
 	auto bsearch = BeamSearch(&instance);
 	auto lsearch = LocalSearch(&instance);
+	auto vnd = VariableNeighborhoodDescent(&instance);
 	auto grasp = Grasp(&instance, &gcon, &lsearch);
 	auto annealing =  Annealing(&instance);
 
@@ -44,6 +46,7 @@ int main(int argc, char* argv[])
 		AlgorithmGui("Randomized", &rcon),
 		AlgorithmGui("Beam Search", &bsearch),
 		AlgorithmGui("Local Search", &lsearch),
+		AlgorithmGui("Variable Neighborhood Descent", &vnd),
 		AlgorithmGui("GRASP", &grasp),
 		AlgorithmGui("Simulated Annealing", &annealing)
 	};
