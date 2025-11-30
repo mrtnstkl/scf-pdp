@@ -342,6 +342,34 @@ void DeltaCalculator::remove_stop(int route_id, const Node* prev_node, const Nod
 	route_squares[route_id] += d_prev_next * d_prev_next;
 }
 
+void DeltaCalculator::swap_stops(int route_id, const Node* node_prev_a, const Node* node_a,
+	const Node* node_b, const Node* node_after_b)
+{
+	// 1. remove edges between A and its predecessor
+	const auto d_a_to_prev = (node_prev_a == nullptr)
+		? instance->get_distance(node_a)
+		: instance->get_distance(node_prev_a, node_a);
+	route_sum -= d_a_to_prev;
+	route_squares[route_id] -= d_a_to_prev * d_a_to_prev;
+	// 2. remove edges between B and its successor
+	const auto d_b_to_after = (node_after_b == nullptr)
+		? instance->get_distance(node_b)
+		: instance->get_distance(node_b, node_after_b);
+	route_sum -= d_b_to_after;
+	route_squares[route_id] -= d_b_to_after * d_b_to_after;
+	// 3. add edge between A and its new successor
+	const auto d_a_to_after = (node_after_b == nullptr)
+		? instance->get_distance(node_a)
+		: instance->get_distance(node_a, node_after_b);
+	route_sum += d_a_to_after;
+	route_squares[route_id] += d_a_to_after * d_a_to_after;
+	// 4. add edge between B and its new predecessor
+	const auto d_b_to_prev = (node_prev_a == nullptr)
+		? instance->get_distance(node_b)
+		: instance->get_distance(node_prev_a, node_b);
+}
+
+
 float DeltaCalculator::fairness() const
 {
 	return route_sum * route_sum / float(
