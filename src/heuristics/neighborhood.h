@@ -21,6 +21,18 @@ public:
 	virtual bool has_next() = 0;
 };
 
+// only for testing purposes
+// returns the initial solution once
+class DummyNeighborhood : public Neighborhood
+{
+	bool done_;
+public:
+	DummyNeighborhood(const Solution& initial_solution);
+	float next() override;
+	Solution get() override;
+	bool has_next() override;
+};
+
 class MoveRequestWithinRouteNeighborhood : public Neighborhood
 {
 	size_t node_count_;
