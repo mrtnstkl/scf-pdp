@@ -78,6 +78,7 @@ struct GreedyNearestAny : public GreedyConstruction
 struct GreedyRandomizedClosest : public GreedyConstruction
 {
 	int candidates_count = 3;
+	int tightening_interval = 5;
 
 	GreedyRandomizedClosest(Instance* instance)
 		: GreedyConstruction(instance) {}

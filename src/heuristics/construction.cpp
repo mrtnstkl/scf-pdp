@@ -237,9 +237,11 @@ size_t GreedyRandomizedClosest::step()
 
 	// find the closest node that is either...
 	std::map<dist_t, Node*> closest;
+	const size_t reduced_candidates_count =
+		std::max(1, candidates_count - (int(s.step) / tightening_interval));
 	auto add_candidate = [&](float cost, Node* node)
 	{
-		if (closest.size() < candidates_count)
+		if (closest.size() < reduced_candidates_count)
 		{
 			closest.insert({cost, std::move(node)});
 		}
@@ -295,7 +297,8 @@ size_t GreedyRandomizedClosest::step()
 
 void GreedyRandomizedClosest::draw()
 {
-	ImGui::SliderInt("Candidates Count", &candidates_count, 1, 10);
+	ImGui::SliderInt("Candidates Count", &candidates_count, 1, 5);
+	ImGui::SliderInt("Tightening Interval", &tightening_interval, 1, 50);
 }
 
 
