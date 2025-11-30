@@ -84,11 +84,9 @@ bool MoveRequestWithinRouteNeighborhood::NodeMover::swap_right()
 
 	// 2. calculate new loads
 	const int new_load_at_a = load - route[i_a]->capacity_change + route[i_b]->capacity_change;
-	const int new_load_at_b = load - route[i_b]->capacity_change;
+	// since load is inclusive, swapping right changes load at a, but not at b
 	// 2a. check capacity
 	if (new_load_at_a < 0 || new_load_at_a > max_load)
-		return false;
-	if (new_load_at_b < 0 || new_load_at_b > max_load)
 		return false;
 
 	// 3. perform swap in delta calculator
@@ -104,7 +102,7 @@ bool MoveRequestWithinRouteNeighborhood::NodeMover::swap_right()
 
 	// 5. update idx and load
 	idx += 1;
-	load = new_load_at_b;
+	// load stays the same
 	return true;
 }
 
