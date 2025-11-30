@@ -1,5 +1,7 @@
 #include "heuristics/neighborhood.h"
+#include "iostream"
 #include "neighborhood.h"
+
 
 #include <algorithm>
 #include <cassert>
@@ -138,8 +140,8 @@ void MoveRequestWithinRouteNeighborhood::prepare_next_request()
 	const int load_at_dropoff = dq.load_at_position[dropoff_idx];
 	const int max_load = instance_->vehicle_capacity;
 	// left mover moves dropoff to the left: terminator at pickup
-	movers_[0] = std::make_unique<NodeMover>(
-		dq.route_copy, route_id, dropoff_idx, initial_delta_, load_at_dropoff, max_load, *pickup_it);
+	movers_[0] = std::make_unique<NodeMover>(dq.route_copy, route_id, dropoff_idx, initial_delta_,
+		load_at_dropoff, max_load, *pickup_it);
 	// right mover moves pickup to the right: terminator at dropoff
 	movers_[1] = std::make_unique<NodeMover>(
 		dq.route_copy, route_id, pickup_idx, initial_delta_, load_at_pickup, max_load, *dropoff_it);
@@ -200,10 +202,9 @@ float MoveRequestWithinRouteNeighborhood::next()
 	size_t this_mover = last_mover_ ^ 1;
 	if (movers_[this_mover] == nullptr)
 		this_mover = last_mover_;
-	
-	const bool success = this_mover == 0
-		? movers_[this_mover]->swap_left() // swap dropoff left
-		: movers_[this_mover]->swap_right(); // swap pickup right
+
+	const bool success =
+		this_mover == 0 ? movers_[this_mover]->swap_left() : movers_[this_mover]->swap_right();
 
 	if (!success)
 	{
@@ -212,7 +213,7 @@ float MoveRequestWithinRouteNeighborhood::next()
 	}
 
 	last_mover_ = this_mover;
-	
+
 	const float cost_from_delta = movers_[this_mover]->delta.cost();
 	// const float cost_from_soln = get().calculate_cost();
 	// std::cout << "Current cost from delta: " << cost_from_delta
@@ -247,6 +248,7 @@ MoveRequestToAnotherRouteNeighborhood::MoveRequestToAnotherRouteNeighborhood(
 	const Solution& initial_solution, Instance* instance)
 	: Neighborhood(initial_solution)
 	, current_solution_(initial_solution)
+	, candidate_solution_(initial_solution)
 	, delta_(instance, initial_solution)
 {
 	instance_ = instance;
@@ -269,35 +271,36 @@ MoveRequestToAnotherRouteNeighborhood::MoveRequestToAnotherRouteNeighborhood(
 }
 float MoveRequestToAnotherRouteNeighborhood::next()
 {
-	float best_delta = 0.0f;
-	DeltaCalculator best_move(instance_, current_solution_);
-
+	// Try requests until we find one with a feasible move, or we run out.
+	// Each call to next() will advance the queue by processing (and popping) at least one request.
 	while (!request_queue_.empty())
 	{
-		auto [request, from_driver_id] = request_queue_.front();
+		// Peek and immediately pop the current request to advance the queue
+		auto front_pair = request_queue_.front();
 		request_queue_.pop();
+		auto [request, from_driver_id] = front_pair;
 
-		auto pickupNode = request->pickup_node;
-		auto dropoffNode = request->dropoff_node;
+		const Node* pickupNode = request->pickup_node;
+		const Node* dropoffNode = request->dropoff_node;
 
+		// Try moving this request to every other driver
 		for (size_t to_driver_id = 0; to_driver_id < current_solution_.routes.size();
 			++to_driver_id)
 		{
-			if (to_driver_id == from_driver_id)
+			if (to_driver_id == static_cast<size_t>(from_driver_id))
 				continue;
 
 			const auto& to_route = current_solution_.routes[to_driver_id];
 			const auto& from_route = current_solution_.routes[from_driver_id];
 
-			// Copy node lists into vectors so we can index them
+			// Copy node lists into vectors for indexing
 			std::vector<Node*> to_nodes(to_route.nodes.begin(), to_route.nodes.end());
 			std::vector<Node*> from_nodes(from_route.nodes.begin(), from_route.nodes.end());
 
-			/* ---- load computation ---- */
+			// ---- load computation on target route ----
 			std::vector<int> load;
 			load.reserve(to_nodes.size() + 1);
 			load.push_back(0);
-
 			int cur = 0;
 			for (auto n : to_nodes)
 			{
@@ -305,18 +308,23 @@ float MoveRequestToAnotherRouteNeighborhood::next()
 				load.push_back(cur);
 			}
 
-			/* ---- all pickup insertion points ---- */
-			for (size_t p_pos = 0; p_pos < to_nodes.size(); ++p_pos)
+			// ---- all pickup insertion points ----
+			for (size_t p_pos = 0; p_pos <= to_nodes.size(); ++p_pos)
 			{
 				for (size_t d_pos = p_pos + 1; d_pos <= to_nodes.size(); ++d_pos)
 				{
-					/* ---- full capacity check ---- */
+					// ---- capacity check between pickup and dropoff ----
 					int pickup_load = pickupNode->capacity_change;
 					bool cap_ok = true;
-
-					for (size_t t = p_pos; t < d_pos; ++t)
+					for (size_t t = 0; t <= to_nodes.size(); ++t)
 					{
-						if (load[t] + pickup_load > instance_->vehicle_capacity)
+						int l = load[t];
+						if (t >= p_pos)
+							l += pickup_load;
+						if (t >= d_pos)
+							l -= pickup_load;
+
+						if (l < 0 || l > instance_->vehicle_capacity)
 						{
 							cap_ok = false;
 							break;
@@ -325,29 +333,40 @@ float MoveRequestToAnotherRouteNeighborhood::next()
 					if (!cap_ok)
 						continue;
 
+					// Don’t reinsert into a route that already contains this request
+					if (std::find(to_nodes.begin(), to_nodes.end(), const_cast<Node*>(pickupNode))
+						!= to_nodes.end())
+						continue;
+					if (std::find(to_nodes.begin(), to_nodes.end(), const_cast<Node*>(dropoffNode))
+						!= to_nodes.end())
+						continue;
+
+					// ---- build local delta on the BASE solution ----
 					DeltaCalculator delta(instance_, current_solution_);
-					if (std::find(to_nodes.begin(), to_nodes.end(), pickupNode) != to_nodes.end())
-						continue;
-					if (std::find(to_nodes.begin(), to_nodes.end(), dropoffNode) != to_nodes.end())
-						continue;
-					/* ---- safe insertion of pickup ---- */
+
+					// ---- safe insertion of pickup ----
 					Node* p_before = (p_pos == 0 ? nullptr : to_nodes[p_pos - 1]);
 					Node* p_after = (p_pos == to_nodes.size() ? nullptr : to_nodes[p_pos]);
 
-					delta.add_stop(to_driver_id, p_before, pickupNode, p_after);
+					delta.add_stop(to_driver_id, p_before, const_cast<Node*>(pickupNode), p_after);
 
-					/* ---- safe insertion of dropoff ---- */
+					// ---- safe insertion of dropoff ----
 					Node* d_before = (d_pos == 0 ? nullptr : to_nodes[d_pos - 1]);
 					Node* d_after = (d_pos == to_nodes.size() ? nullptr : to_nodes[d_pos]);
 
-					delta.add_stop(to_driver_id, d_before, dropoffNode, d_after);
+					delta.add_stop(to_driver_id, d_before, const_cast<Node*>(dropoffNode), d_after);
 
-					/* ---- safe removal from source route ---- */
-					auto it_p = std::find(from_nodes.begin(), from_nodes.end(), pickupNode);
-					auto it_d = std::find(from_nodes.begin(), from_nodes.end(), dropoffNode);
+					// ---- safe removal from source route ----
+					auto it_p = std::find(
+						from_nodes.begin(), from_nodes.end(), const_cast<Node*>(pickupNode));
+					auto it_d = std::find(
+						from_nodes.begin(), from_nodes.end(), const_cast<Node*>(dropoffNode));
 
-					size_t ip = std::distance(from_nodes.begin(), it_p);
-					size_t id = std::distance(from_nodes.begin(), it_d);
+					if (it_p == from_nodes.end() || it_d == from_nodes.end())
+						continue;
+
+					size_t ip = static_cast<size_t>(std::distance(from_nodes.begin(), it_p));
+					size_t id = static_cast<size_t>(std::distance(from_nodes.begin(), it_d));
 
 					Node* rp_before = (ip == 0 ? nullptr : from_nodes[ip - 1]);
 					Node* rp_after = (ip + 1 >= from_nodes.size() ? nullptr : from_nodes[ip + 1]);
@@ -357,35 +376,64 @@ float MoveRequestToAnotherRouteNeighborhood::next()
 
 					if (id > ip)
 					{
-						delta.remove_stop(from_driver_id, rd_before, dropoffNode, rd_after);
-						delta.remove_stop(from_driver_id, rp_before, pickupNode, rp_after);
+						delta.remove_stop(
+							from_driver_id, rd_before, const_cast<Node*>(dropoffNode), rd_after);
+						delta.remove_stop(
+							from_driver_id, rp_before, const_cast<Node*>(pickupNode), rp_after);
 					}
 					else
 					{
-						delta.remove_stop(from_driver_id, rp_before, pickupNode, rp_after);
-						delta.remove_stop(from_driver_id, rd_before, dropoffNode, rd_after);
+						delta.remove_stop(
+							from_driver_id, rp_before, const_cast<Node*>(pickupNode), rp_after);
+						delta.remove_stop(
+							from_driver_id, rd_before, const_cast<Node*>(dropoffNode), rd_after);
 					}
 
-					Solution candidate = current_solution_;
+					// ---- remember this move, don’t apply it yet ----
+					last_move_ = {from_driver_id, static_cast<int>(to_driver_id), pickupNode,
+						dropoffNode, p_before, p_after, d_before, d_after, true};
 
-					apply_move_to_solution(candidate, from_driver_id, to_driver_id, pickupNode,
-						dropoffNode, p_before, p_after, d_before, d_after);
+					// *** NEW: Debug print for delta cost (with context) ***
+					std::cout << "Feasible move found - Request ID: " << request->id
+							  << ", From driver: " << from_driver_id
+							  << ", To driver: " << to_driver_id << ", Pickup pos: " << p_pos
+							  << ", Dropoff pos: " << d_pos << ", Delta cost: " << delta.cost()
+							  << std::endl;
 
-					// overwrite neighborhood state
-					current_solution_ = candidate;
-
+					// Found a feasible move—return its cost immediately
 					return delta.cost();
 				}
 			}
 		}
+
+		// No feasible move for this request—it has been skipped (already popped)
+		// Continue to the next request in the queue
 	}
-	return best_delta;
+
+	// No more neighbours
+	done_ = true;
+	last_move_.valid = false;
+	return std::numeric_limits<float>::infinity();
 }
 
 
-Solution MoveRequestToAnotherRouteNeighborhood::get() { return current_solution_; }
+Solution MoveRequestToAnotherRouteNeighborhood::get()
+{
+	if (!last_move_.valid)
+	{
+		return current_solution_;
+	}
 
-bool MoveRequestToAnotherRouteNeighborhood::has_next() { return request_queue_.size() > 0; }
+	Solution sol = current_solution_;
+	apply_move_to_solution(sol, last_move_.from_driver_id, last_move_.to_driver_id,
+		last_move_.pickupNode, last_move_.dropoffNode, last_move_.p_before, last_move_.p_after,
+		last_move_.d_before, last_move_.d_after);
+
+
+	return sol;
+}
+
+bool MoveRequestToAnotherRouteNeighborhood::has_next() { return !done_; }
 
 Node* prev_or_null(const std::vector<Node*>& v, size_t i) { return (i == 0 ? nullptr : v[i - 1]); }
 
