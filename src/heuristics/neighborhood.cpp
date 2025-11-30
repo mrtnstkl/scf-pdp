@@ -458,3 +458,290 @@ void apply_move_to_solution(Solution& sol, int from_driver_id, int to_driver_id,
 
 	sol.routes[to_driver_id].total_distance = sol.calculate_route_time(sol.routes[to_driver_id]);
 }
+
+
+//=============================================================
+
+
+SwapRequestsBetweenRoutesNeighborhood::SwapRequestsBetweenRoutesNeighborhood(
+	const Solution& initial_solution, Instance* instance)
+	: Neighborhood(initial_solution)
+	, instance_(instance)
+	, current_solution_(initial_solution)
+	, candidate_solution_(initial_solution)
+	, delta_(instance, initial_solution)
+{
+	node_count_ = instance->node_count;
+	done_ = false;
+
+	// initialize driver pair queue (only i < j to avoid duplicates)
+	for (size_t i = 0; i < initial_solution.routes.size(); ++i)
+	{
+		for (size_t j = i + 1; j < initial_solution.routes.size(); ++j)
+		{
+			driver_pair_queue_.emplace(static_cast<int>(i), static_cast<int>(j));
+		}
+	}
+	prepare_request_queues();
+}
+
+void SwapRequestsBetweenRoutesNeighborhood::prepare_request_queues()
+{
+	// Clear queues
+	while (!from_driver_request_queue_.empty())
+	{
+		from_driver_request_queue_.pop();
+	}
+	while (!to_driver_request_queue_.empty())
+	{
+		to_driver_request_queue_.pop();
+	}
+
+	if (driver_pair_queue_.empty())
+	{
+		done_ = true;
+		return;
+	}
+
+	auto driver_pair = driver_pair_queue_.front();
+	driver_pair_queue_.pop();
+	int from_id = driver_pair.first;
+	int to_id = driver_pair.second;
+
+	// Fill from_driver_request_queue_ with requests from from_id
+	const Route& from_route = current_solution_.routes[from_id];
+	for (const Node* node : from_route.nodes)
+	{
+		if (node->is_pickup())
+		{
+			CustomerRequest& request = instance_->get_request_from_node(node);
+			from_driver_request_queue_.emplace(&request, from_id);
+		}
+	}
+
+	// Fill to_driver_request_queue_ with requests from to_id
+	const Route& to_route = current_solution_.routes[to_id];
+	for (const Node* node : to_route.nodes)
+	{
+		if (node->is_pickup())
+		{
+			CustomerRequest& request = instance_->get_request_from_node(node);
+			to_driver_request_queue_.emplace(&request, to_id);
+		}
+	}
+}
+
+float SwapRequestsBetweenRoutesNeighborhood::next()
+{
+	if (from_driver_request_queue_.empty() || to_driver_request_queue_.empty())
+	{
+		prepare_request_queues();
+		if (done_)
+		{
+			last_move_A.valid = false;
+			last_move_B.valid = false;
+			return std::numeric_limits<float>::infinity();
+		}
+	}
+
+	// Pop one request from each queue
+	auto reqA_pair = from_driver_request_queue_.front();
+	from_driver_request_queue_.pop();
+	auto [reqA, from_id] = reqA_pair;
+
+	auto reqB_pair = to_driver_request_queue_.front();
+	to_driver_request_queue_.pop();
+	auto [reqB, to_id] = reqB_pair;
+
+	const Node* pickupNodeA = reqA->pickup_node;
+	const Node* dropoffNodeA = reqA->dropoff_node;
+	const Node* pickupNodeB = reqB->pickup_node;
+	const Node* dropoffNodeB = reqB->dropoff_node;
+
+	// Convert routes to vectors
+	std::vector<Node*> from_nodes(current_solution_.routes[from_id].nodes.begin(),
+		current_solution_.routes[from_id].nodes.end());
+	std::vector<Node*> to_nodes(
+		current_solution_.routes[to_id].nodes.begin(), current_solution_.routes[to_id].nodes.end());
+
+	// Find removal positions for A in from_nodes
+	auto it_pa = std::find(from_nodes.begin(), from_nodes.end(), const_cast<Node*>(pickupNodeA));
+	auto it_da = std::find(from_nodes.begin(), from_nodes.end(), const_cast<Node*>(dropoffNodeA));
+	size_t ipa = std::distance(from_nodes.begin(), it_pa);
+	size_t ida = std::distance(from_nodes.begin(), it_da);
+
+	// Find removal positions for B in to_nodes
+	auto it_pb = std::find(to_nodes.begin(), to_nodes.end(), const_cast<Node*>(pickupNodeB));
+	auto it_db = std::find(to_nodes.begin(), to_nodes.end(), const_cast<Node*>(dropoffNodeB));
+	size_t ipb = std::distance(to_nodes.begin(), it_pb);
+	size_t idb = std::distance(to_nodes.begin(), it_db);
+
+	// Temporary routes after removal
+	std::vector<Node*> temp_from;
+	temp_from.reserve(from_nodes.size() - 2);
+	for (auto n : from_nodes)
+	{
+		if (n != const_cast<Node*>(pickupNodeA) && n != const_cast<Node*>(dropoffNodeA))
+		{
+			temp_from.push_back(n);
+		}
+	}
+
+	std::vector<Node*> temp_to;
+	temp_to.reserve(to_nodes.size() - 2);
+	for (auto n : to_nodes)
+	{
+		if (n != const_cast<Node*>(pickupNodeB) && n != const_cast<Node*>(dropoffNodeB))
+		{
+			temp_to.push_back(n);
+		}
+	}
+
+	// Compute load profiles after removal
+	std::vector<int> load_temp_from(temp_from.size() + 1);
+	load_temp_from[0] = 0;
+	int cur_load = 0;
+	for (size_t k = 0; k < temp_from.size(); ++k)
+	{
+		cur_load += temp_from[k]->capacity_change;
+		load_temp_from[k + 1] = cur_load;
+	}
+
+	std::vector<int> load_temp_to(temp_to.size() + 1);
+	load_temp_to[0] = 0;
+	cur_load = 0;
+	for (size_t k = 0; k < temp_to.size(); ++k)
+	{
+		cur_load += temp_to[k]->capacity_change;
+		load_temp_to[k + 1] = cur_load;
+	}
+
+	// Nested loops over insertion positions
+	for (size_t p_pos_A = 0; p_pos_A <= temp_to.size(); ++p_pos_A)
+	{
+		for (size_t d_pos_A = p_pos_A + 1; d_pos_A <= temp_to.size(); ++d_pos_A)
+		{
+			// Capacity check for inserting A into temp_to
+			int demand_A = pickupNodeA->capacity_change;
+			bool cap_ok_A = true;
+			for (size_t t = 0; t <= temp_to.size(); ++t)
+			{
+				int l = load_temp_to[t];
+				if (t >= p_pos_A)
+					l += demand_A;
+				if (t >= d_pos_A)
+					l -= demand_A;
+				if (l < 0 || l > instance_->vehicle_capacity)
+				{
+					cap_ok_A = false;
+					break;
+				}
+			}
+			if (!cap_ok_A)
+				continue;
+
+			for (size_t p_pos_B = 0; p_pos_B <= temp_from.size(); ++p_pos_B)
+			{
+				for (size_t d_pos_B = p_pos_B + 1; d_pos_B <= temp_from.size(); ++d_pos_B)
+				{
+					// Capacity check for inserting B into temp_from
+					int demand_B = pickupNodeB->capacity_change;
+					bool cap_ok_B = true;
+					for (size_t t = 0; t <= temp_from.size(); ++t)
+					{
+						int l = load_temp_from[t];
+						if (t >= p_pos_B)
+							l += demand_B;
+						if (t >= d_pos_B)
+							l -= demand_B;
+						if (l < 0 || l > instance_->vehicle_capacity)
+						{
+							cap_ok_B = false;
+							break;
+						}
+					}
+					if (!cap_ok_B)
+						continue;
+
+					// Both insertions feasible; compute delta
+					DeltaCalculator delta(instance_, current_solution_);
+
+					// Remove A from from_route
+					Node* pA_before_remove = (ipa == 0 ? nullptr : from_nodes[ipa - 1]);
+					Node* pA_after_remove =
+						(ipa + 1 == from_nodes.size() ? nullptr : from_nodes[ipa + 1]);
+					delta.remove_stop(
+						from_id, pA_before_remove, const_cast<Node*>(pickupNodeA), pA_after_remove);
+
+					Node* dA_before_remove = (ida == 0 ? nullptr : from_nodes[ida - 1]);
+					Node* dA_after_remove =
+						(ida + 1 == from_nodes.size() ? nullptr : from_nodes[ida + 1]);
+					delta.remove_stop(from_id, dA_before_remove, const_cast<Node*>(dropoffNodeA),
+						dA_after_remove);
+
+					// Remove B from to_route
+					Node* pB_before_remove = (ipb == 0 ? nullptr : to_nodes[ipb - 1]);
+					Node* pB_after_remove =
+						(ipb + 1 == to_nodes.size() ? nullptr : to_nodes[ipb + 1]);
+					delta.remove_stop(
+						to_id, pB_before_remove, const_cast<Node*>(pickupNodeB), pB_after_remove);
+
+					Node* dB_before_remove = (idb == 0 ? nullptr : to_nodes[idb - 1]);
+					Node* dB_after_remove =
+						(idb + 1 == to_nodes.size() ? nullptr : to_nodes[idb + 1]);
+					delta.remove_stop(
+						to_id, dB_before_remove, const_cast<Node*>(dropoffNodeB), dB_after_remove);
+
+					// Insert A into to_route (using temp_to neighbors)
+					Node* p_before_A = (p_pos_A == 0 ? nullptr : temp_to[p_pos_A - 1]);
+					Node* p_after_A = (p_pos_A == temp_to.size() ? nullptr : temp_to[p_pos_A]);
+					delta.add_stop(to_id, p_before_A, const_cast<Node*>(pickupNodeA), p_after_A);
+
+					Node* d_before_A = (d_pos_A == 0 ? nullptr : temp_to[d_pos_A - 1]);
+					Node* d_after_A = (d_pos_A == temp_to.size() ? nullptr : temp_to[d_pos_A]);
+					delta.add_stop(to_id, d_before_A, const_cast<Node*>(dropoffNodeA), d_after_A);
+
+					// Insert B into from_route (using temp_from neighbors)
+					Node* p_before_B = (p_pos_B == 0 ? nullptr : temp_from[p_pos_B - 1]);
+					Node* p_after_B = (p_pos_B == temp_from.size() ? nullptr : temp_from[p_pos_B]);
+					delta.add_stop(from_id, p_before_B, const_cast<Node*>(pickupNodeB), p_after_B);
+
+					Node* d_before_B = (d_pos_B == 0 ? nullptr : temp_from[d_pos_B - 1]);
+					Node* d_after_B = (d_pos_B == temp_from.size() ? nullptr : temp_from[d_pos_B]);
+					delta.add_stop(from_id, d_before_B, const_cast<Node*>(dropoffNodeB), d_after_B);
+
+					// Record moves
+					last_move_A = {from_id, to_id, pickupNodeA, dropoffNodeA, p_before_A, p_after_A,
+						d_before_A, d_after_A, true};
+					last_move_B = {to_id, from_id, pickupNodeB, dropoffNodeB, p_before_B, p_after_B,
+						d_before_B, d_after_B, true};
+
+					return delta.cost();
+				}
+			}
+		}
+	}
+
+	// No feasible swap for this request pair; continue to next
+	return next();
+}
+
+Solution SwapRequestsBetweenRoutesNeighborhood::get()
+{
+	if (!last_move_A.valid || !last_move_B.valid)
+	{
+		return current_solution_;
+	}
+
+	Solution sol = current_solution_;
+	apply_move_to_solution(sol, last_move_A.from_driver_id, last_move_A.to_driver_id,
+		last_move_A.pickupNode, last_move_A.dropoffNode, last_move_A.p_before, last_move_A.p_after,
+		last_move_A.d_before, last_move_A.d_after);
+	apply_move_to_solution(sol, last_move_B.from_driver_id, last_move_B.to_driver_id,
+		last_move_B.pickupNode, last_move_B.dropoffNode, last_move_B.p_before, last_move_B.p_after,
+		last_move_B.d_before, last_move_B.d_after);
+
+	return sol;
+}
+
+bool SwapRequestsBetweenRoutesNeighborhood::has_next() { return !done_; }

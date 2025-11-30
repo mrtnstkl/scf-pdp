@@ -153,3 +153,43 @@ public:
 	Solution get() override;
 	bool has_next() override;
 };
+
+
+class SwapRequestsBetweenRoutesNeighborhood : public Neighborhood
+{
+	Instance* instance_;
+	size_t node_count_;
+	bool done_;
+	Solution current_solution_;
+	Solution candidate_solution_;
+	DeltaCalculator delta_;
+
+	struct LastMove
+	{
+		int from_driver_id;
+		int to_driver_id;
+		const Node* pickupNode;
+		const Node* dropoffNode;
+		Node* p_before;
+		Node* p_after;
+		Node* d_before;
+		Node* d_after;
+		bool valid = false;
+	};
+
+	LastMove last_move_A;
+	LastMove last_move_B;
+
+public:
+	SwapRequestsBetweenRoutesNeighborhood(const Solution& initial_solution, Instance* instance);
+	float next() override;
+	Solution get() override;
+	bool has_next() override;
+
+	std::queue<std::pair<CustomerRequest*, int>> from_driver_request_queue_;
+	std::queue<std::pair<CustomerRequest*, int>> to_driver_request_queue_;
+
+private:
+	void prepare_request_queues();
+	std::queue<std::pair<int, int>> driver_pair_queue_;
+};

@@ -6,6 +6,7 @@
 #include "core/instance.h"
 #include "core/solution.h"
 #include "heuristics/neighborhood.h"
+#include "neighborhood.h"
 
 class LocalSearch : public Algorithm
 {
@@ -20,6 +21,7 @@ public:
 		DUMMY_NEIGHBORHOOD = 0,
 		MOVE_REQUEST_WITHIN_ROUTE,
 		MOVE_REQUEST_TO_ANOTHER_ROUTE,
+		SWAP_REQUESTS_BETWEEN_ROUTES,
 	};
 
 private:
