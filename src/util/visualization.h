@@ -4,6 +4,8 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <string>
+#include <fstream>
 
 
 #include "core/algorithm.h"
@@ -101,6 +103,19 @@ AlgorithmVisualizer<A>::AlgorithmVisualizer(A* algorithm)
 	current_canvas_.stroke_width = .2f;
 }
 
+static void print_metrics_to_file(SolutionMetrics& metrics, uint64_t time_ms)
+{
+	std::ofstream file("metrics_log.txt", std::ios::app);
+	if (file.is_open())
+	{
+		file
+			<< time_ms << ", "
+			<< metrics.step << ", "
+			<< metrics.total_cost << "\n";
+		file.close();
+	}
+}
+
 template <typename A>
 inline void AlgorithmVisualizer<A>::draw()
 {
@@ -142,6 +157,8 @@ inline void AlgorithmVisualizer<A>::draw()
 		record_snapshot(algorithm_->get_current_solution(), algorithm_->metrics, CANVAS);
 		if (!canvas_states_.empty())
 			current_canvas_.elements = canvas_states_.rbegin()->second;
+		auto& metrics = algorithm_->metrics;
+		print_metrics_to_file(metrics, timer.get<std::chrono::milliseconds>());
 	};
 
 
