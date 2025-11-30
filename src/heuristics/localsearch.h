@@ -18,9 +18,12 @@ public:
 	};
 	enum NeighborhoodType : int
 	{
-		MOVE_REQUEST_WITHIN_ROUTE = 0,
-		MOVE_REQUEST_TO_ANOTHER_ROUTE,
-		SWAP_REQUESTS_BETWEEN_ROUTES,
+		// MOVE_REQUEST_WITHIN_ROUTE, MOVE_REQUEST_TO_ANOTHER_ROUTE, SWAP_REQUESTS_BETWEEN_ROUTES, // 20333
+		// MOVE_REQUEST_WITHIN_ROUTE, SWAP_REQUESTS_BETWEEN_ROUTES, MOVE_REQUEST_TO_ANOTHER_ROUTE, // 22634
+		// MOVE_REQUEST_TO_ANOTHER_ROUTE, MOVE_REQUEST_WITHIN_ROUTE, SWAP_REQUESTS_BETWEEN_ROUTES, // 17699
+		MOVE_REQUEST_TO_ANOTHER_ROUTE, SWAP_REQUESTS_BETWEEN_ROUTES, MOVE_REQUEST_WITHIN_ROUTE, // 17130
+		// SWAP_REQUESTS_BETWEEN_ROUTES, MOVE_REQUEST_WITHIN_ROUTE, MOVE_REQUEST_TO_ANOTHER_ROUTE, // 17546
+		// SWAP_REQUESTS_BETWEEN_ROUTES, MOVE_REQUEST_TO_ANOTHER_ROUTE, MOVE_REQUEST_WITHIN_ROUTE, // 20058
 		ENUM_COUNT,
 	};
 
@@ -35,8 +38,10 @@ protected:
 	NeighborhoodType neighborhood_type_;
 
 public:
-	using Metrics = SolutionMetrics;
-	Metrics metrics;
+	struct Metrics : SolutionMetrics
+	{
+		int neighborhood_type;
+	} metrics;
 
 	LocalSearch(Instance* instance);
 
@@ -50,3 +55,11 @@ public:
 
 	void draw() override;
 };
+
+template<>
+inline void draw<LocalSearch::Metrics>(LocalSearch::Metrics& drawable)
+{
+	SolutionMetrics& base = drawable;
+	draw(base);
+	ImGui::Text("Current Neighborhood: N_%d", drawable.neighborhood_type);
+}

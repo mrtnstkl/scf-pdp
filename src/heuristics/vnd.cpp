@@ -51,6 +51,7 @@ size_t VariableNeighborhoodDescent::step()
 				  << " (cost: " << current_cost_ << ")\n";
 		metrics.step++;
 		current_solution_.calculate_metrics(metrics);
+		metrics.neighborhood_type = int(neighborhood_type_);
 		neighborhood_type_ = NeighborhoodType(0); // restart with first neighborhood
 	}
 	else

@@ -36,7 +36,7 @@ size_t LocalSearch::step()
 	default:
 		assert(false && "Unknown neighborhood type");
 	}
-
+	metrics.neighborhood_type = int(neighborhood_type_);
 
 	bool improvement_found = false;
 	if (improvement_strategy_ == FIRST_IMPROVEMENT)
@@ -96,8 +96,8 @@ Solution LocalSearch::get_current_solution() { return current_solution_; }
 
 void LocalSearch::draw()
 {
-	static const char* neighborhood_labels[]{
-		"Move Request Within Route", "Move Request To Another Route", "Swap Requests Between Routes"};
+	static const char* neighborhood_labels[]{"Move Request To Another Route",
+		"Swap Requests Between Routes", "Move Request Within Route"};
 	ImGui::Combo(
 		"Neighborhood", reinterpret_cast<int*>(&neighborhood_type_), neighborhood_labels, 3);
 
