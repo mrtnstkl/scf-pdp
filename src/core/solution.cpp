@@ -367,6 +367,8 @@ void DeltaCalculator::swap_stops(int route_id, const Node* node_prev_a, const No
 	const auto d_b_to_prev = (node_prev_a == nullptr)
 		? instance->get_distance(node_b)
 		: instance->get_distance(node_prev_a, node_b);
+	route_sum += d_b_to_prev;
+	route_squares[route_id] += d_b_to_prev * d_b_to_prev;
 }
 
 
