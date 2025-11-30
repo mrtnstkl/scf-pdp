@@ -31,7 +31,7 @@ int main(int argc, char* argv[])
 	auto wcon = GreedyNearestWeighted(&instance);
 	auto rcon = RandomConstruction(&instance);
 	auto bsearch = BeamSearch(&instance);
-	//auto search = LocalSearch(&instance);
+	auto lsearch = LocalSearch(&instance);
 
 	auto algorithms = std::array{
 		AlgorithmGui("Greedy Nearest Any", &dcon),
@@ -39,7 +39,7 @@ int main(int argc, char* argv[])
 		AlgorithmGui("Greedy Nearest Weighted", &wcon),
 		AlgorithmGui("Randomized", &rcon),
 		AlgorithmGui("Beam Search", &bsearch),
-		//AlgorithmGui("Local Search", &search)
+		AlgorithmGui("Local Search", &lsearch)
 	};
 
 	Gui gui;
