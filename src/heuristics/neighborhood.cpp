@@ -126,29 +126,19 @@ void MoveRequestWithinRouteNeighborhood::prepare_next_request()
 	const auto pickup_idx = std::distance(dq.route_copy.begin(), pickup_it);
 	const auto dropoff_idx = std::distance(dq.route_copy.begin(), dropoff_it);
 
+	assert(pickup_idx < dropoff_idx);
+
 	// initialize left and right movers
 	const int route_id = dq.driver_id;
 	const int load_at_pickup = dq.load_at_position[pickup_idx];
-	const int max_load = instance_->vehicle_capacity;
-	// left mover: no terminator
-	movers_[0] = std::make_unique<NodeMover>(
-		dq.route_copy, route_id, pickup_idx, initial_delta_, load_at_pickup, max_load, nullptr);
-	// right mover: terminator at dropoff
-	movers_[1] = std::make_unique<NodeMover>(
-		dq.route_copy, route_id, pickup_idx, initial_delta_, load_at_pickup, max_load, *dropoff_it);
-
-	/*
-	// initialize left and right movers
-	const int route_id = dq.driver_id;
 	const int load_at_dropoff = dq.load_at_position[dropoff_idx];
 	const int max_load = instance_->vehicle_capacity;
-	// left mover: no terminator
+	// left mover moves dropoff to the left: terminator at pickup
 	movers_[0] = std::make_unique<NodeMover>(
-		dq.route_copy, route_id, pickup_idx, initial_delta_, load_at_dropoff, max_load, *pickup_it);
-	// right mover: terminator at dropoff
+		dq.route_copy, route_id, dropoff_idx, initial_delta_, load_at_dropoff, max_load, *pickup_it);
+	// right mover moves pickup to the right: terminator at dropoff
 	movers_[1] = std::make_unique<NodeMover>(
-		dq.route_copy, route_id, pickup_idx, initial_delta_, load_at_dropoff, max_load, nullptr);
-	*/
+		dq.route_copy, route_id, pickup_idx, initial_delta_, load_at_pickup, max_load, *dropoff_it);
 
 	last_mover_ = 0;
 
@@ -209,8 +199,8 @@ float MoveRequestWithinRouteNeighborhood::next()
 		this_mover = last_mover_;
 	
 	const bool success = this_mover == 0
-		? movers_[this_mover]->swap_left()
-		: movers_[this_mover]->swap_right();
+		? movers_[this_mover]->swap_left() // swap dropoff left
+		: movers_[this_mover]->swap_right(); // swap pickup right
 
 	if (!success)
 	{
@@ -219,7 +209,12 @@ float MoveRequestWithinRouteNeighborhood::next()
 	}
 
 	last_mover_ = this_mover;
-	return movers_[this_mover]->delta.cost();
+	
+	const float cost_from_delta = movers_[this_mover]->delta.cost();
+	// const float cost_from_soln = get().calculate_cost();
+	// std::cout << "Current cost from delta: " << cost_from_delta
+	// 	<< ", from solution: " << cost_from_soln << std::endl;
+	return cost_from_delta;
 }
 
 Solution MoveRequestWithinRouteNeighborhood::get()
@@ -230,23 +225,11 @@ Solution MoveRequestWithinRouteNeighborhood::get()
 		return initial_solution_; // should not happen
 	}
 
+	NodeMover& mover = *movers_[last_mover_];
+	const auto route_id = mover.route_id;
+
 	Solution sol = initial_solution_;
-	const auto route_id = movers_[last_mover_]->route_id;
-
-	std::cout
-		<< "\nApplied move in route " << route_id << ", new cost: "
-		<< movers_[last_mover_]->delta.cost() << std::endl;
-	int i = 0;
-	for (auto n : movers_[last_mover_]->route)
-	{
-		std::cout << (n->is_pickup() ? "P" : "D") << instance_->get_index(n) << " ";
-	}
-
-
-	sol.routes[route_id].nodes =
-		std::list<Node*>(movers_[last_mover_]->route.begin(), movers_[last_mover_]->route.end());
-	std::cout << "\nreal cost: " << sol.calculate_cost() << std::endl;
-	std::cout << "route distance: " << sol.routes[route_id].total_distance << " -> " << sol.calculate_route_time(sol.routes[route_id]) << std::endl;
+	sol.routes[route_id].nodes = std::list<Node*>(mover.route.begin(), mover.route.end());
 	sol.routes[route_id].total_distance = sol.calculate_route_time(sol.routes[route_id]);
 	return sol;
 }
