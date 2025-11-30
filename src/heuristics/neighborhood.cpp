@@ -68,6 +68,7 @@ MoveRequestToAnotherRouteNeighborhood::MoveRequestToAnotherRouteNeighborhood(
 	, delta_(instance, initial_solution)
 	, current_solution_(initial_solution)
 {
+	instance_ = instance;
 	node_count_ = instance->node_count;
 	done_ = false;
 
@@ -110,8 +111,11 @@ float MoveRequestToAnotherRouteNeighborhood::next()
 			for (size_t to_driver_id = 0; to_driver_id < current_solution_.routes.size();
 				++to_driver_id)
 			{
+				std::vector<float> weight_at_position = {0};
+				int current_weight = 0;
 
-				//skip same route
+
+				// skip same route
 				if (to_driver_id == from_driver_id)
 					continue;
 
@@ -122,8 +126,6 @@ float MoveRequestToAnotherRouteNeighborhood::next()
 					//  routes have nodes, nodes have capacity_change
 					//  jsut sum up capacity changes to get weight at every position
 
-					std::vector<float> weight_at_position = {0};
-					int current_weight = 0;
 
 					for (auto node : current_solution_.routes[to_driver_id].nodes)
 					{
@@ -134,12 +136,66 @@ float MoveRequestToAnotherRouteNeighborhood::next()
 
 				const Route& from_route = current_solution_.routes[from_driver_id];
 				// Try all insertion points in to_route
-				
+				auto pickup_iterator = current_solution_.routes[to_driver_id].nodes.begin();
+				auto dropoff_iterator = current_solution_.routes[to_driver_id].nodes.begin();
+				for (size_t pickup_pos = 0;
+					pickup_pos < current_solution_.routes[to_driver_id].nodes.size();
+					++pickup_pos, pickup_iterator++)
+				{
+					if (weight_at_position[pickup_pos] + weight > instance_->vehicle_capacity)
+						continue; // skip infeasible insertion
+
+					// find dropoff position
+					size_t dropoff_pos = pickup_pos + 1;
+					dropoff_iterator = std::next(pickup_iterator);
+
+					for (; dropoff_pos
+						< current_solution_.routes[to_driver_id].nodes.size() - pickup_pos;
+						++dropoff_pos, dropoff_iterator++)
+					{
+						if (weight_at_position[dropoff_pos] + weight > instance_->vehicle_capacity)
+							break;
+					}
+					// now we have pickup_pos and dropoff_pos
+					// void add_stop(int route_id, const Node* prev_node, const Node* new_node,
+
+
+					Node* insertAfter = *pickup_iterator;
+					Node* insertBefore = *(std::next(pickup_iterator));
+
+					delta_.add_stop(to_driver_id, insertAfter, pickupNode, insertBefore);
+
+					Node* insertAfterDropoff = *dropoff_iterator;
+					Node* insertBeforeDropoff = *(std::next(dropoff_iterator));
+
+					delta_.add_stop(
+						to_driver_id, insertAfterDropoff, dropoffNode, insertBeforeDropoff);
+
+					// remove from from_route
+					auto from_pickup_iterator =
+						std::find(current_solution_.routes[from_driver_id].nodes.begin(),
+							current_solution_.routes[from_driver_id].nodes.end(), pickupNode);
+
+					auto from_dropoff_iterator =
+						std::find(current_solution_.routes[from_driver_id].nodes.begin(),
+							current_solution_.routes[from_driver_id].nodes.end(), dropoffNode);
+
+
+					delta_.remove_stop(from_driver_id, *std::prev(from_pickup_iterator), pickupNode,
+						*std::next(from_pickup_iterator));
+					delta_.remove_stop(from_driver_id, *std::prev(from_dropoff_iterator), dropoffNode,
+						*std::next(from_dropoff_iterator));
+
+
+					break;
+				}
 
 
 				return delta_.cost();
 			}
 		}
+	}
+}
 
-		Solution MoveRequestToAnotherRouteNeighborhood::get() { return current_solution_; }
-		bool MoveRequestToAnotherRouteNeighborhood::has_next() { return !done_; }
+Solution MoveRequestToAnotherRouteNeighborhood::get() { return current_solution_; }
+bool MoveRequestToAnotherRouteNeighborhood::has_next() { return !done_; }

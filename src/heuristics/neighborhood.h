@@ -63,3 +63,36 @@ public:
 	Solution get() override;
 	bool has_next() override;
 };
+
+class MoveRequestToAnotherRouteNeighborhood : public Neighborhood
+{
+	Instance* instance_;
+	size_t node_count_;
+	bool done_;
+	Solution current_solution_;
+	DeltaCalculator delta_;
+
+	enum Moving
+	{
+		NEW_REQUEST,
+		PICKUP,
+		DROPOFF
+	} current_move_strategy_;
+
+	// the queue contains requests that shall be processed in order
+	// along with the request, the driver id that has the request loaded is stored
+	std::queue<std::pair<CustomerRequest*, int>> request_queue_;
+
+	size_t pickup_index_, dropoff_index_;
+	int target_driver_id_;
+
+	// store for each driver the current load at any given point in time
+	std::vector<std::list<int>> driver_loads_;
+
+public:
+	MoveRequestToAnotherRouteNeighborhood(const Solution& initial_solution, Instance* instance);
+	float next() override;
+	Solution get() override;
+	bool has_next() override;
+
+};
