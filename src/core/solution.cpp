@@ -37,7 +37,7 @@ uint64_t Solution::calculate_route_time(const Route& route) const
 
 float Solution::calculate_jain_fairness() const
 {
-	const int n = instance->request_count;
+	const uint64_t n = instance->vehicle_count;
 	uint64_t route_sum = 0;
 	uint64_t route_sq_sum = 0;
 	for (const auto& route : routes)
@@ -51,7 +51,7 @@ float Solution::calculate_jain_fairness() const
 
 float Solution::calculate_cost() const
 {
-	int route_sum = 0;
+	uint64_t route_sum = 0;
 	for (const auto& route : routes)
 		route_sum += route.total_distance;
 	return route_sum + instance->fairness * (1.f - calculate_jain_fairness());
@@ -374,8 +374,8 @@ void DeltaCalculator::swap_stops(int route_id, const Node* node_prev_a, const No
 
 float DeltaCalculator::fairness() const
 {
-	return route_sum * route_sum / float(
-		instance->vehicle_count *
+	return (route_sum * route_sum) / float(
+		route_squares.size() *
 		std::accumulate(route_squares.begin(), route_squares.end(), uint64_t(0))
 	);
 }
