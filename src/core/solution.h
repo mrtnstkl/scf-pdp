@@ -74,9 +74,39 @@ struct DeltaCalculator
 
 	DeltaCalculator(Instance* instance);
 	DeltaCalculator(Instance* instance, const Solution& solution);
+	/**
+	 * @brief Add a stop to the end of the route
+	 * 
+	 * @param route_id 
+	 * @param prev_node the node before the new node, or nullptr if inserting at start
+	 * @param new_node the new node to insert
+	 */
 	void add_stop(int route_id, const Node* prev_node, const Node* new_node);
+	/**
+	 * @brief Add a stop between two nodes
+	 * 
+	 * @param route_id 
+	 * @param prev_node the node before the new node, or nullptr if inserting at start
+	 * @param new_node the new node to insert
+	 * @param next_node the node after the new node
+	 */
 	void add_stop(int route_id, const Node* prev_node, const Node* new_node, const Node* next_node);
+	/**
+	 * @brief Remove a stop from the end of the route
+	 * 
+	 * @param route_id 
+	 * @param prev_node the node before the old node, or nullptr if removing from start
+	 * @param old_node the old node to remove
+	 */
 	void remove_stop(int route_id, const Node* prev_node, const Node* old_node);
+	/**
+	 * @brief Remove a stop between two nodes
+	 * 
+	 * @param route_id 
+	 * @param prev_node the node before the old node, or nullptr if removing from start
+	 * @param old_node the old node to remove
+	 * @param next_node the node after the old node
+	 */
 	void remove_stop(int route_id, const Node* prev_node, const Node* old_node, const Node* next_node);
 	float fairness() const;
 	float cost() const;
