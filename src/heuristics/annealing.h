@@ -14,8 +14,12 @@
 struct Annealing : public Algorithm
 {
 	Instance* instance;
-	Solution current_solution;
+	
+    Solution current_solution;
+    Solution best_solution;
 	float current_cost;
+    float best_cost;
+
 	float initial_temperature = 5.f;
 	float cooling_rate = 0.99f;
 	float min_temperature = 0;
