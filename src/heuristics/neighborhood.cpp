@@ -47,7 +47,7 @@ bool MoveRequestWithinRouteNeighborhood::NodeMover::swap_left()
 
 	// 2. calculate new loads
 	// since load is inclusive, swapping left does not change load at b, only at a
-	const int new_load_at_a = load - route[i_b]->capacity_change;
+	const int new_load_at_a = load - route[i_a]->capacity_change;
 	// 2a. check capacity
 	if (new_load_at_a < 0 || new_load_at_a > max_load)
 		return false;
@@ -128,7 +128,6 @@ void MoveRequestWithinRouteNeighborhood::prepare_next_request()
 	const auto pickup_idx = std::distance(dq.route_copy.begin(), pickup_it);
 	const auto dropoff_idx = std::distance(dq.route_copy.begin(), dropoff_it);
 
-	/*
 	// initialize left and right movers
 	const int route_id = dq.driver_id;
 	const int load_at_pickup = dq.load_at_position[pickup_idx];
@@ -139,8 +138,8 @@ void MoveRequestWithinRouteNeighborhood::prepare_next_request()
 	// right mover: terminator at dropoff
 	movers_[1] = std::make_unique<NodeMover>(
 		dq.route_copy, route_id, pickup_idx, initial_delta_, load_at_pickup, max_load, *dropoff_it);
-	*/
 
+	/*
 	// initialize left and right movers
 	const int route_id = dq.driver_id;
 	const int load_at_dropoff = dq.load_at_position[dropoff_idx];
@@ -151,6 +150,7 @@ void MoveRequestWithinRouteNeighborhood::prepare_next_request()
 	// right mover: terminator at dropoff
 	movers_[1] = std::make_unique<NodeMover>(
 		dq.route_copy, route_id, pickup_idx, initial_delta_, load_at_dropoff, max_load, nullptr);
+	*/
 
 	last_mover_ = 0;
 
@@ -234,8 +234,22 @@ Solution MoveRequestWithinRouteNeighborhood::get()
 
 	Solution sol = initial_solution_;
 	const auto route_id = movers_[last_mover_]->route_id;
+
+	std::cout
+		<< "\nApplied move in route " << route_id << ", new cost: "
+		<< movers_[last_mover_]->delta.cost() << std::endl;
+	int i = 0;
+	for (auto n : movers_[last_mover_]->route)
+	{
+		std::cout << (n->is_pickup() ? "P" : "D") << instance_->get_index(n) << " ";
+	}
+
+
 	sol.routes[route_id].nodes =
 		std::list<Node*>(movers_[last_mover_]->route.begin(), movers_[last_mover_]->route.end());
+	std::cout << "\nreal cost: " << sol.calculate_cost() << std::endl;
+	std::cout << "route distance: " << sol.routes[route_id].total_distance << " -> " << sol.calculate_route_time(sol.routes[route_id]) << std::endl;
+	sol.routes[route_id].total_distance = sol.calculate_route_time(sol.routes[route_id]);
 	return sol;
 }
 
