@@ -5,6 +5,7 @@
 
 #include "core/instance.h"
 #include "core/solution.h"
+#include "heuristics/annealing.h"
 #include "heuristics/construction.h"
 #include "heuristics/beamsearch.h"
 #include "heuristics/localsearch.h"
@@ -32,6 +33,7 @@ int main(int argc, char* argv[])
 	auto rcon = RandomConstruction(&instance);
 	auto bsearch = BeamSearch(&instance);
 	auto lsearch = LocalSearch(&instance);
+	auto annealing =  Annealing(&instance);
 
 	auto algorithms = std::array{
 		AlgorithmGui("Greedy Nearest Any", &dcon),
@@ -39,7 +41,8 @@ int main(int argc, char* argv[])
 		AlgorithmGui("Greedy Nearest Weighted", &wcon),
 		AlgorithmGui("Randomized", &rcon),
 		AlgorithmGui("Beam Search", &bsearch),
-		AlgorithmGui("Local Search", &lsearch)
+		AlgorithmGui("Local Search", &lsearch),
+		AlgorithmGui("Simulated Annealing", &annealing)
 	};
 
 	Gui gui;
