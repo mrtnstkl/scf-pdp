@@ -78,6 +78,11 @@ void LocalSearch::reset()
 
 bool LocalSearch::done() { return done_; }
 
+void LocalSearch::set_initial_solution(const Solution& soln)
+{
+	initial_solution_ = soln;
+}
+
 Solution LocalSearch::get_current_solution() { return current_solution_; }
 
 void LocalSearch::draw()

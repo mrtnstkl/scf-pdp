@@ -1,13 +1,14 @@
-#include <iostream>
-#include <vector>
-#include <string>
 #include <array>
+#include <iostream>
+#include <string>
+#include <vector>
 
 #include "core/instance.h"
 #include "core/solution.h"
 #include "heuristics/annealing.h"
-#include "heuristics/construction.h"
 #include "heuristics/beamsearch.h"
+#include "heuristics/construction.h"
+#include "heuristics/grasp.h"
 #include "heuristics/localsearch.h"
 #include "util/canvas.h"
 #include "util/visualization.h"
@@ -33,6 +34,7 @@ int main(int argc, char* argv[])
 	auto rcon = RandomConstruction(&instance);
 	auto bsearch = BeamSearch(&instance);
 	auto lsearch = LocalSearch(&instance);
+	auto grasp = Grasp(&instance, &gcon, &lsearch);
 	auto annealing =  Annealing(&instance);
 
 	auto algorithms = std::array{
@@ -42,6 +44,7 @@ int main(int argc, char* argv[])
 		AlgorithmGui("Randomized", &rcon),
 		AlgorithmGui("Beam Search", &bsearch),
 		AlgorithmGui("Local Search", &lsearch),
+		AlgorithmGui("GRASP", &grasp),
 		AlgorithmGui("Simulated Annealing", &annealing)
 	};
 

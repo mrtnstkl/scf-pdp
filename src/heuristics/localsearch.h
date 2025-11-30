@@ -41,6 +41,8 @@ public:
 	void reset() override;
 	bool done() override;
 
+	void set_initial_solution(const Solution& soln);
+
 	Solution get_current_solution() override;
 
 	void draw() override;
