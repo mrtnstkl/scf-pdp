@@ -1,9 +1,10 @@
 #pragma once
 
 #include <list>
+#include <memory>
 #include <queue>
 #include <vector>
-#include <memory>
+
 
 #include "core/algorithm.h"
 #include "core/instance.h"
@@ -27,6 +28,7 @@ public:
 class DummyNeighborhood : public Neighborhood
 {
 	bool done_;
+
 public:
 	DummyNeighborhood(const Solution& initial_solution);
 	float next() override;
@@ -51,7 +53,7 @@ class MoveRequestWithinRouteNeighborhood : public Neighborhood
 		int load, max_load;
 		/**
 		 * @brief Construct a new Node Mover object
-		 * 
+		 *
 		 * @param route the route to operate on
 		 * @param node_id the id of the route
 		 * @param idx the index of the node to move
@@ -60,17 +62,20 @@ class MoveRequestWithinRouteNeighborhood : public Neighborhood
 		 * @param max_load the maximum allowed load of the driver
 		 * @param terminator the node at which to stop
 		 */
-		NodeMover(const std::vector<Node*>& route, int node_id, size_t idx, DeltaCalculator delta, int load, int max_load, Node* terminator = nullptr);
+		NodeMover(const std::vector<Node*>& route, int node_id, size_t idx, DeltaCalculator delta,
+			int load, int max_load, Node* terminator = nullptr);
 		/**
 		 * @brief Swap the node at idx with the node to the left. Updates idx, load, and delta.
-		 * 
-		 * @return false if not possible, either because idx is at start, terminator is reached, or capacity is violated
+		 *
+		 * @return false if not possible, either because idx is at start, terminator is reached, or
+		 * capacity is violated
 		 */
 		bool swap_left();
 		/**
 		 * @brief Swap the node at idx with the node to the right. Updates idx, load, and delta.
-		 * 
-		 * @return false if not possible, either because idx is at end, terminator is reached, or capacity is violated
+		 *
+		 * @return false if not possible, either because idx is at end, terminator is reached, or
+		 * capacity is violated
 		 */
 		bool swap_right();
 	};
@@ -97,12 +102,16 @@ public:
 	bool has_next() override;
 };
 
+
+//=============================================================
+
 class MoveRequestToAnotherRouteNeighborhood : public Neighborhood
 {
 	Instance* instance_;
 	size_t node_count_;
 	bool done_;
 	Solution current_solution_;
+	Solution candidate_solution_;
 	DeltaCalculator delta_;
 
 	enum Moving
@@ -122,10 +131,65 @@ class MoveRequestToAnotherRouteNeighborhood : public Neighborhood
 	// store for each driver the current load at any given point in time
 	std::vector<std::list<int>> driver_loads_;
 
+
+	struct LastMove
+	{
+		int from_driver_id;
+		int to_driver_id;
+		const Node* pickupNode;
+		const Node* dropoffNode;
+		Node* p_before;
+		Node* p_after;
+		Node* d_before;
+		Node* d_after;
+		bool valid = false;
+	};
+
+	LastMove last_move_;
+
 public:
 	MoveRequestToAnotherRouteNeighborhood(const Solution& initial_solution, Instance* instance);
 	float next() override;
 	Solution get() override;
 	bool has_next() override;
+};
 
+
+class SwapRequestsBetweenRoutesNeighborhood : public Neighborhood
+{
+	Instance* instance_;
+	size_t node_count_;
+	bool done_;
+	Solution current_solution_;
+	Solution candidate_solution_;
+	DeltaCalculator delta_;
+
+	struct LastMove
+	{
+		int from_driver_id;
+		int to_driver_id;
+		const Node* pickupNode;
+		const Node* dropoffNode;
+		Node* p_before;
+		Node* p_after;
+		Node* d_before;
+		Node* d_after;
+		bool valid = false;
+	};
+
+	LastMove last_move_A;
+	LastMove last_move_B;
+
+public:
+	SwapRequestsBetweenRoutesNeighborhood(const Solution& initial_solution, Instance* instance);
+	float next() override;
+	Solution get() override;
+	bool has_next() override;
+
+	std::queue<std::pair<CustomerRequest*, int>> from_driver_request_queue_;
+	std::queue<std::pair<CustomerRequest*, int>> to_driver_request_queue_;
+
+private:
+	void prepare_request_queues();
+	std::queue<std::pair<int, int>> driver_pair_queue_;
 };
