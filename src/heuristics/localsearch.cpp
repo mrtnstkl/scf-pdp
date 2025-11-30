@@ -8,6 +8,9 @@
 LocalSearch::LocalSearch(Instance* instance)
 	: instance_(instance), initial_solution_(instance, true), current_solution_(initial_solution_)
 {
+	improvement_strategy_ = FIRST_IMPROVEMENT;
+	neighborhood_type_ = MOVE_REQUEST_WITHIN_ROUTE;
+
 	if (std::filesystem::exists("solutions/current_solution.sln"))
 		initial_solution_ = Solution::load_from_file("solutions/current_solution.sln", instance);
 	reset();
@@ -15,7 +18,6 @@ LocalSearch::LocalSearch(Instance* instance)
 
 size_t LocalSearch::step()
 {
-
 	std::unique_ptr<Neighborhood> neighborhood;
 	switch (neighborhood_type_)
 	{
@@ -46,7 +48,7 @@ size_t LocalSearch::step()
 		while (neighborhood->has_next())
 		{
 			const float next_cost = neighborhood->next();
-			if (next_cost > current_cost_)
+			if (next_cost >= current_cost_)
 				continue;
 			current_cost_ = next_cost;
 			current_solution_ = neighborhood->get();
