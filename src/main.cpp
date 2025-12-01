@@ -36,7 +36,9 @@ int main(int argc, char* argv[])
 	auto bsearch = BeamSearch(&instance);
 	auto lsearch = LocalSearch(&instance);
 	auto vnd = VariableNeighborhoodDescent(&instance);
-	auto grasp = Grasp(&instance, &gcon, &lsearch);
+	auto grasp_construction = GreedyRandomizedClosest(&instance);
+	auto grasp_localsearch = LocalSearch(&instance);
+	auto grasp = Grasp(&instance, &grasp_construction, &grasp_localsearch);
 	auto annealing =  Annealing(&instance);
 
 	auto algorithms = std::array{

@@ -1,8 +1,37 @@
 #include "algorithm.h"
 
 #include <chrono>
+#include <functional>
+#include <thread>
 
 #include "imgui.h"
+
+Algorithm::~Algorithm() { worker.stop(); }
+
+void Algorithm::Worker::start(std::function<void(const std::atomic_bool&)> func)
+{
+	stop();
+
+	running = true;
+	stop_requested = false;
+	thread = std::thread(
+		[this, func]()
+		{
+			func(stop_requested);
+			running = false;
+		});
+}
+
+void Algorithm::Worker::stop()
+{
+	if (thread.joinable())
+	{
+		stop_requested = true;
+		thread.join();
+	}
+	running = false;
+}
+
 
 StoppingCriterion::StoppingCriterion() { reset(); }
 

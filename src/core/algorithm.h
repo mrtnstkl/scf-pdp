@@ -1,5 +1,10 @@
 #pragma once
 
+#include <atomic>
+#include <functional>
+#include <mutex>
+#include <thread>
+
 #include "core/solution.h"
 #include "util/canvas.h"
 #include "util/gui.h"
@@ -7,6 +12,17 @@
 
 struct Algorithm : public GuiElement
 {
+	struct Worker
+	{
+		std::atomic_bool running;
+		std::atomic_bool stop_requested;
+		std::mutex data_mutex;
+		std::thread thread;
+		void start(std::function<void(const std::atomic_bool&)> func);
+		void stop();
+	} worker;
+	virtual ~Algorithm();
+
 	virtual size_t step() = 0;
 	virtual void reset() = 0;
 	virtual bool done() = 0;

@@ -137,20 +137,24 @@ inline void AlgorithmVisualizer<A>::draw()
 	};
 	// run_to_end: run the algorithm until it is done
 	// data is recorded according to the recording level
-	const auto run_to_end = [&]()
+	// this is safe to run in a separate thread
+	const auto run_to_end = [this](const std::atomic_bool& should_stop)
 	{
 		Timer timer;
 		if (recording_level_ == NONE)
 		{
-			while (!algorithm_->done())
+			while (!algorithm_->done() && !should_stop)
 				algorithm_->step();
 			record_snapshot(
 				algorithm_->get_current_solution(), algorithm_->metrics, recording_level_);
 		}
 		else
 		{
-			while (!algorithm_->done())
-				step();
+			while (!algorithm_->done() && !should_stop)
+			{
+				algorithm_->step();
+				record_snapshot(algorithm_->get_current_solution(), algorithm_->metrics, recording_level_);
+			}
 		}
 		feedback_ = {"Completed in " + timer.get<std::string>(), ImVec4(0.f, 1.f, 0.f, 1.f)};
 		// always record final state and display it
@@ -161,6 +165,19 @@ inline void AlgorithmVisualizer<A>::draw()
 		print_metrics_to_file(metrics, timer.get<std::chrono::milliseconds>());
 	};
 
+
+	std::lock_guard<std::mutex> lock(algorithm_->worker.data_mutex);
+	if (algorithm_->worker.running)
+	{
+		ImGui::Text("Algorithm is running...");
+		ImGui::Text("Step: %zu", algorithm_->metrics.step);
+		ImGui::Text("Cost: %.2f", algorithm_->metrics.total_cost);
+		if (ImGui::Button("Request Stop"))
+			algorithm_->worker.stop_requested = true;
+		if (algorithm_->worker.stop_requested)
+			ImGui::Text("Stop requested, please wait.");
+		return;
+	}
 
 	// Reset and Free Buttons
 	// "Reset": resets the algorithm and clears recorded data
@@ -181,13 +198,14 @@ inline void AlgorithmVisualizer<A>::draw()
 		step();
 	// "Run to End": run the algorithm to completion
 	if (ImGui::SameLine(), ImGui::Button("Run to End"))
-		run_to_end();
+		algorithm_->worker.start(run_to_end);
 	ImGui::EndDisabled();
 	// "Re-Run": reset + run to end
 	if (ImGui::SameLine(), ImGui::Button("Re-Run"))
 	{
 		reset();
-		run_to_end();
+		algorithm_->worker.start(run_to_end);
+		return;
 	}
 
 	// Recording Level
