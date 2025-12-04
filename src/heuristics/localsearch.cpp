@@ -1,51 +1,114 @@
-#include "localsearch.h"
+#include "heuristics/localsearch.h"
 
-Neighborhood::Neighborhood(const Solution& initial_solution)
-	: initial_solution_(initial_solution)
+#include <filesystem>
+
+#include "imgui.h"
+
+
+LocalSearch::LocalSearch(Instance* instance)
+	: instance_(instance), initial_solution_(instance, true), current_solution_(initial_solution_)
 {
+	improvement_strategy_ = FIRST_IMPROVEMENT;
+	neighborhood_type_ = MOVE_REQUEST_WITHIN_ROUTE;
+
+	if (std::filesystem::exists("solutions/current_solution.sln"))
+		initial_solution_ = Solution::load_from_file("solutions/current_solution.sln", instance);
+	reset();
 }
 
-MoveRequestWithinRouteNeighborhood::MoveRequestWithinRouteNeighborhood(const Solution& initial_solution, Instance* instance)
-	: Neighborhood(initial_solution), delta_(instance, initial_solution), current_solution_(initial_solution)
+size_t LocalSearch::step()
 {
-	node_count_ = instance->node_count;
+	std::unique_ptr<Neighborhood> neighborhood;
+	switch (neighborhood_type_)
+	{
+	case MOVE_REQUEST_WITHIN_ROUTE:
+		neighborhood =
+			std::make_unique<MoveRequestWithinRouteNeighborhood>(current_solution_, instance_);
+		break;
+	case MOVE_REQUEST_TO_ANOTHER_ROUTE:
+		neighborhood =
+			std::make_unique<MoveRequestToAnotherRouteNeighborhood>(current_solution_, instance_);
+		break;
+	case SWAP_REQUESTS_BETWEEN_ROUTES:
+		neighborhood =
+			std::make_unique<SwapRequestsBetweenRoutesNeighborhood>(current_solution_, instance_);
+		break;
+	default:
+		assert(false && "Unknown neighborhood type");
+	}
+	metrics.neighborhood_type = int(neighborhood_type_);
+
+	bool improvement_found = false;
+	if (improvement_strategy_ == FIRST_IMPROVEMENT)
+	{
+		while (neighborhood->has_next())
+		{
+			const float next_cost = neighborhood->next();
+			if (next_cost >= current_cost_)
+				continue;
+			current_cost_ = next_cost;
+			current_solution_ = neighborhood->get();
+			improvement_found = true;
+			break;
+		}
+	}
+	else if (improvement_strategy_ == BEST_IMPROVEMENT)
+	{
+		while (neighborhood->has_next())
+		{
+			const float next_cost = neighborhood->next();
+			if (next_cost >= current_cost_)
+				continue;
+			current_cost_ = next_cost;
+			current_solution_ = neighborhood->get();
+			improvement_found = true;
+		}
+	}
+
+	if (improvement_found)
+	{
+		metrics.step++;
+		current_solution_.calculate_metrics(metrics);
+	}
+	else
+		done_ = true;
+
+	return metrics.step;
+}
+
+void LocalSearch::reset()
+{
+	current_solution_ = initial_solution_;
+	current_cost_ = current_solution_.calculate_cost();
 	done_ = false;
-	current_move_strategy_ = NEW_REQUEST;
-	// initialize the request queue
-	for (size_t driver_id = 0; driver_id < initial_solution_.routes.size(); ++driver_id)
+	metrics.step = 0;
+	current_solution_.calculate_metrics(metrics);
+}
+
+bool LocalSearch::done() { return done_; }
+
+void LocalSearch::set_initial_solution(const Solution& soln)
+{
+	initial_solution_ = soln;
+}
+
+Solution LocalSearch::get_current_solution() { return current_solution_; }
+
+void LocalSearch::draw()
+{
+	static const char* neighborhood_labels[]{"Move Request To Another Route",
+		"Swap Requests Between Routes", "Move Request Within Route"};
+	ImGui::Combo(
+		"Neighborhood", reinterpret_cast<int*>(&neighborhood_type_), neighborhood_labels, 3);
+
+	static const char* strat_labels[]{"First", "Best"};
+	ImGui::Combo(
+		"Improvement Strat", reinterpret_cast<int*>(&improvement_strategy_), strat_labels, 2);
+
+	if (ImGui::Button("Load Solution from File"))
 	{
-		const Route& route = initial_solution_.routes[driver_id];
-		for (const Node* node : route.nodes)
-		{
-			if (node->is_pickup())
-				continue; // only process each request once
-			CustomerRequest& request = instance->get_request_from_node(node);
-			request_queue_.emplace(&request, driver_id);
-		}
+		if (std::filesystem::exists("solutions/current_solution.sln"))
+			initial_solution_ =
+				Solution::load_from_file("solutions/current_solution.sln", instance_);
 	}
-}
-
-float MoveRequestWithinRouteNeighborhood::next()
-{
-	bool new_found = false;
-	while (!request_queue_.empty() && !new_found)
-	{
-		if (current_move_strategy_ == NEW_REQUEST)
-		{
-			// get a new request from the queue
-			// move it to the very start
-		}
-
-
-	}
-
-	return delta_.cost();
-}
-Solution MoveRequestWithinRouteNeighborhood::get()
-{
-	return current_solution_;
-}
-bool MoveRequestWithinRouteNeighborhood::has_next()
-{
-	return !done_;
 }

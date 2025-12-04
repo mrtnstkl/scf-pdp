@@ -1,12 +1,16 @@
-#include <iostream>
-#include <vector>
-#include <string>
 #include <array>
+#include <iostream>
+#include <string>
+#include <vector>
 
 #include "core/instance.h"
 #include "core/solution.h"
-#include "heuristics/construction.h"
+#include "heuristics/annealing.h"
 #include "heuristics/beamsearch.h"
+#include "heuristics/construction.h"
+#include "heuristics/grasp.h"
+#include "heuristics/localsearch.h"
+#include "heuristics/vnd.h"
 #include "util/canvas.h"
 #include "util/visualization.h"
 
@@ -30,13 +34,23 @@ int main(int argc, char* argv[])
 	auto wcon = GreedyNearestWeighted(&instance);
 	auto rcon = RandomConstruction(&instance);
 	auto bsearch = BeamSearch(&instance);
+	auto lsearch = LocalSearch(&instance);
+	auto vnd = VariableNeighborhoodDescent(&instance);
+	auto grasp_construction = GreedyRandomizedClosest(&instance);
+	auto grasp_localsearch = LocalSearch(&instance);
+	auto grasp = Grasp(&instance, &grasp_construction, &grasp_localsearch);
+	auto annealing =  Annealing(&instance);
 
 	auto algorithms = std::array{
 		AlgorithmGui("Greedy Nearest Any", &dcon),
 		AlgorithmGui("Greedy Nearest Radnomized", &gcon),
 		AlgorithmGui("Greedy Nearest Weighted", &wcon),
 		AlgorithmGui("Randomized", &rcon),
-		AlgorithmGui("Beam Search", &bsearch)
+		AlgorithmGui("Beam Search", &bsearch),
+		AlgorithmGui("Local Search", &lsearch),
+		AlgorithmGui("Variable Neighborhood Descent", &vnd),
+		AlgorithmGui("GRASP", &grasp),
+		AlgorithmGui("Simulated Annealing", &annealing)
 	};
 
 	Gui gui;

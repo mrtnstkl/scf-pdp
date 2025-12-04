@@ -2,7 +2,9 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
+#include <string>
 #include <unordered_set>
 #include <numeric>
 
@@ -35,7 +37,7 @@ uint64_t Solution::calculate_route_time(const Route& route) const
 
 float Solution::calculate_jain_fairness() const
 {
-	const int n = instance->request_count;
+	const uint64_t n = instance->vehicle_count;
 	uint64_t route_sum = 0;
 	uint64_t route_sq_sum = 0;
 	for (const auto& route : routes)
@@ -49,7 +51,7 @@ float Solution::calculate_jain_fairness() const
 
 float Solution::calculate_cost() const
 {
-	int route_sum = 0;
+	uint64_t route_sum = 0;
 	for (const auto& route : routes)
 		route_sum += route.total_distance;
 	return route_sum + instance->fairness * (1.f - calculate_jain_fairness());
@@ -68,35 +70,39 @@ bool Solution::validate() const
 	if (routes.size() != instance->vehicle_count)
 		return false; // unexpected route count
 
-	std::unordered_set<CustomerRequest*> all_served;
-	for (const Route& route : routes)
+	std::unordered_set<const Node*> visited_nodes;
+	std::unordered_map<CustomerRequest*, size_t> open_requests;
+
+	for (size_t r = 0; r < routes.size() ; ++r)
 	{
-		std::unordered_set<CustomerRequest*> current_requests;
 		int current_load = 0;
-		for (const Node* node : route.nodes)
+		for (const Node* node : routes[r].nodes)
 		{
+			if (!visited_nodes.insert(node).second)
+				return false; // node already visited
+
 			CustomerRequest* cr = &instance->get_request_from_node(node);
 			if (node->is_pickup())
 			{
-				if (all_served.contains(cr))
-					return false; // already served
-				current_requests.insert(cr);
-				all_served.insert(cr);
+				open_requests.insert({cr, r});
 			}
 			else
 			{
-				if (!current_requests.contains(cr))
+				const auto cr_it = open_requests.find(cr);
+				if (cr_it == open_requests.end())
 					return false; // dropoff without pickup
-				current_requests.erase(cr);
+				if (cr_it->second != r)
+					return false; // dropoff in different route than pickup
+				open_requests.erase(cr_it);
 			}
 			current_load += node->capacity_change;
 			if (current_load < 0 || current_load > instance->vehicle_capacity)
 				return false; // capacity violation
 		}
-		if (!current_requests.empty())
+		if (!open_requests.empty())
 			return false; // not all pickups were dropped off
 	}
-	if (all_served.size() < instance->min_requests)
+	if (visited_nodes.size() / 2 < instance->min_requests)
 		return false; // less customer requests have been fullfilled than required
 	return true;
 }
@@ -159,6 +165,56 @@ void Solution::write_to_file(const char* filename, const char* comment) const
 		file << std::endl;
 	}
 }
+
+Solution Solution::load_from_file(const char* path, Instance* instance)
+{
+	std::ifstream in(path);
+	if (!in)
+	{
+		std::cerr << "Failed to open solution file: " << path << std::endl;
+		throw std::runtime_error("Could not open solution file for reading");
+	}
+
+	std::string header;
+	std::getline(in, header);
+
+	// Build a fresh solution
+	Solution sol(instance);
+
+	std::string line;
+	while (std::getline(in, line))
+	{
+		if (line.empty())
+			continue;
+
+		std::istringstream ss(line);
+
+		Route route;
+		route.depot = instance->depot;
+
+		int idx1based;
+		while (ss >> idx1based)
+		{
+			int idx0based = idx1based - 1;
+
+			// validate
+			if (idx0based < 0 || idx0based >= (int)instance->node_count)
+			{
+				std::cerr << "Invalid node index " << idx1based << " in solution file (valid: 1–"
+						  << instance->node_count << ")." << std::endl;
+				continue;
+			}
+
+			// retrieve node
+			Node* node = &instance->nodes[idx0based];
+			route.nodes.push_back(node);
+		}
+		// compute route distance and store
+		route.total_distance = sol.calculate_route_time(route);
+		sol.routes.push_back(std::move(route));
+	}
+	return sol;
+ }
 
 
 DeltaCalculator::DeltaCalculator(Instance* instance)
@@ -230,8 +286,8 @@ void DeltaCalculator::add_stop(int route_id, const Node* prev_node, const Node* 
 	route_squares[route_id] += d_next * d_next;
 	// 3. remove the distance between the two
 	const auto d_prev_next = instance->get_distance(prev_node, next_node);
-	route_sum += d_prev_next;
-	route_squares[route_id] += d_prev_next * d_prev_next;
+	route_sum -= d_prev_next;
+	route_squares[route_id] -= d_prev_next * d_prev_next;
 }
 
 void DeltaCalculator::remove_stop(int route_id, const Node* prev_node, const Node* old_node)
@@ -286,10 +342,40 @@ void DeltaCalculator::remove_stop(int route_id, const Node* prev_node, const Nod
 	route_squares[route_id] += d_prev_next * d_prev_next;
 }
 
+void DeltaCalculator::swap_stops(int route_id, const Node* node_prev_a, const Node* node_a,
+	const Node* node_b, const Node* node_after_b)
+{
+	// 1. remove edges between A and its predecessor
+	const auto d_a_to_prev = (node_prev_a == nullptr)
+		? instance->get_distance(node_a)
+		: instance->get_distance(node_prev_a, node_a);
+	route_sum -= d_a_to_prev;
+	route_squares[route_id] -= d_a_to_prev * d_a_to_prev;
+	// 2. remove edges between B and its successor
+	const auto d_b_to_after = (node_after_b == nullptr)
+		? instance->get_distance(node_b)
+		: instance->get_distance(node_b, node_after_b);
+	route_sum -= d_b_to_after;
+	route_squares[route_id] -= d_b_to_after * d_b_to_after;
+	// 3. add edge between A and its new successor
+	const auto d_a_to_after = (node_after_b == nullptr)
+		? instance->get_distance(node_a)
+		: instance->get_distance(node_a, node_after_b);
+	route_sum += d_a_to_after;
+	route_squares[route_id] += d_a_to_after * d_a_to_after;
+	// 4. add edge between B and its new predecessor
+	const auto d_b_to_prev = (node_prev_a == nullptr)
+		? instance->get_distance(node_b)
+		: instance->get_distance(node_prev_a, node_b);
+	route_sum += d_b_to_prev;
+	route_squares[route_id] += d_b_to_prev * d_b_to_prev;
+}
+
+
 float DeltaCalculator::fairness() const
 {
-	return route_sum * route_sum / float(
-		instance->vehicle_count *
+	return (route_sum * route_sum) / float(
+		route_squares.size() *
 		std::accumulate(route_squares.begin(), route_squares.end(), uint64_t(0))
 	);
 }

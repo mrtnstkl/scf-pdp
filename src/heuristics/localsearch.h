@@ -1,64 +1,65 @@
 #pragma once
 
-#include <vector>
-#include <queue>
-#include <list>
+#include <memory>
 
 #include "core/algorithm.h"
 #include "core/instance.h"
 #include "core/solution.h"
+#include "heuristics/neighborhood.h"
+#include "neighborhood.h"
 
-
-class Neighborhood
+class LocalSearch : public Algorithm
 {
+public:
+	enum ImprovementStrategy : int
+	{
+		FIRST_IMPROVEMENT = 0,
+		BEST_IMPROVEMENT,
+	};
+	enum NeighborhoodType : int
+	{
+		// MOVE_REQUEST_WITHIN_ROUTE, MOVE_REQUEST_TO_ANOTHER_ROUTE, SWAP_REQUESTS_BETWEEN_ROUTES, // 20333
+		// MOVE_REQUEST_WITHIN_ROUTE, SWAP_REQUESTS_BETWEEN_ROUTES, MOVE_REQUEST_TO_ANOTHER_ROUTE, // 22634
+		// MOVE_REQUEST_TO_ANOTHER_ROUTE, MOVE_REQUEST_WITHIN_ROUTE, SWAP_REQUESTS_BETWEEN_ROUTES, // 17699
+		MOVE_REQUEST_TO_ANOTHER_ROUTE, SWAP_REQUESTS_BETWEEN_ROUTES, MOVE_REQUEST_WITHIN_ROUTE, // 17130
+		// SWAP_REQUESTS_BETWEEN_ROUTES, MOVE_REQUEST_WITHIN_ROUTE, MOVE_REQUEST_TO_ANOTHER_ROUTE, // 17546
+		// SWAP_REQUESTS_BETWEEN_ROUTES, MOVE_REQUEST_TO_ANOTHER_ROUTE, MOVE_REQUEST_WITHIN_ROUTE, // 20058
+		ENUM_COUNT,
+	};
+
 protected:
+	Instance* instance_;
 	Solution initial_solution_;
-public:
-	Neighborhood(const Solution& initial_solution); 
-	virtual float next() = 0;
-	virtual Solution get() = 0;
-	virtual bool has_next() = 0;
-};
-
-class MoveRequestWithinRouteNeighborhood : public Neighborhood
-{
-	size_t node_count_;
-	bool done_;
 	Solution current_solution_;
-	DeltaCalculator delta_;
+	float current_cost_;
+	bool done_;
 
-	enum Moving { NEW_REQUEST, PICKUP, DROPOFF } current_move_strategy_;
-
-	// the queue contains requests that shall be processed in order
-	// along with the request, the driver id that has the request loaded is stored
-	std::queue<std::pair<CustomerRequest*, int>> request_queue_;
-	
-	size_t pickup_index_, dropoff_index_;
-
-	// store for each driver the current load at any given point in time
-	std::vector<std::list<int>> driver_loads_;
-
+	ImprovementStrategy improvement_strategy_;
+	NeighborhoodType neighborhood_type_;
 
 public:
-	MoveRequestWithinRouteNeighborhood(const Solution& initial_solution, Instance* instance); 
-	float next() override;
-	Solution get() override;
-	bool has_next() override;
-};
+	struct Metrics : SolutionMetrics
+	{
+		int neighborhood_type;
+	} metrics;
 
-
-struct LocalSearch : public Algorithm
-{
-	Instance* instance;
-
+	LocalSearch(Instance* instance);
 
 	size_t step() override;
 	void reset() override;
 	bool done() override;
-	
+
+	void set_initial_solution(const Solution& soln);
+
 	Solution get_current_solution() override;
 
 	void draw() override;
-
-
 };
+
+template<>
+inline void draw<LocalSearch::Metrics>(LocalSearch::Metrics& drawable)
+{
+	SolutionMetrics& base = drawable;
+	draw(base);
+	ImGui::Text("Current Neighborhood: N_%d", drawable.neighborhood_type);
+}
