@@ -38,9 +38,12 @@ protected:
 	NeighborhoodType neighborhood_type_;
 
 public:
-	struct Metrics : SolutionMetrics
+	struct Metrics : public SolutionMetrics
 	{
 		int neighborhood_type;
+		void draw() override;
+		void print_head(std::ostream& os) const override;
+		void print(std::ostream& os) const override;
 	} metrics;
 
 	LocalSearch(Instance* instance);

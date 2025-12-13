@@ -1,17 +1,38 @@
 #include "construction.h"
 
+#include <algorithm>
 #include <iostream>
 #include <map>
-#include <unordered_set>
-#include <set>
-#include <algorithm>
-#include <ranges>
+#include <ostream>
 #include <random>
+#include <ranges>
+#include <set>
+#include <unordered_set>
 
+#include "core/solution.h"
 #include "imgui.h"
 
-#include "../util/timer.hpp"
 
+void GreedyConstruction::Metrics::draw()
+{
+	SolutionMetrics::draw();
+	ImGui::Text("Accepted Requests: %zu", accepted_requests);
+	ImGui::Text("Served Requests: %zu", served_requests);
+	for (size_t i = 0; i < driver_loads.size(); ++i)
+		ImGui::Text("Driver %zu Load: %d", i, driver_loads[i]);
+}
+
+void GreedyConstruction::Metrics::print_head(std::ostream& os) const
+{
+	SolutionMetrics::print_head(os);
+	os << ",accepted,served";
+}
+
+void GreedyConstruction::Metrics::print(std::ostream& os) const
+{
+	SolutionMetrics::print(os);
+	os << "," << accepted_requests << "," << served_requests;
+}
 
 void GreedyConstruction::reset()
 {

@@ -4,6 +4,23 @@
 
 #include "imgui.h"
 
+void LocalSearch::Metrics::draw()
+{
+	SolutionMetrics::draw();
+	ImGui::Text("Neighborhood Type: %d", neighborhood_type);
+}
+
+void LocalSearch::Metrics::print_head(std::ostream& os) const
+{
+	SolutionMetrics::print_head(os);
+	os << ",neighborhood_type";
+}
+
+void LocalSearch::Metrics::print(std::ostream& os) const
+{
+	SolutionMetrics::print(os);
+	os << ',' << neighborhood_type;
+}
 
 LocalSearch::LocalSearch(Instance* instance)
 	: instance_(instance), initial_solution_(instance, true), current_solution_(initial_solution_)

@@ -8,6 +8,37 @@
 #include <unordered_set>
 #include <numeric>
 
+#include "imgui.h"
+
+void SolutionMetrics::draw()
+{
+	ImGui::Text("Step: %zu", step);
+    ImGui::Text("Route Count: %zu", route_count);
+	ImGui::Text("Total Cost: %.2f", total_cost);
+	ImGui::Text("Fairness: %.4f", fairness);
+	ImGui::Text("Valid: %s", valid ? "Yes" : "No");
+}
+
+void SolutionMetrics::print_head(std::ostream& os) const
+{
+    os << "step,route_count,total_cost,fairness,valid";
+}
+
+void SolutionMetrics::print(std::ostream& os) const
+{
+	os
+        << step << ','
+        << route_count << ','
+		<< total_cost << ','
+        << fairness << ','
+        << valid;
+}
+
+std::ostream& operator<<(std::ostream& os, const SolutionMetrics& metrics)
+{
+    metrics.print(os);
+    return os;
+}
 
 Solution::Solution(Instance* instance, bool init)
 	: instance(instance)

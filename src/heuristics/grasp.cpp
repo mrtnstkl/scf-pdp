@@ -1,7 +1,27 @@
 #include "heuristics/grasp.h"
+#include "core/solution.h"
 #include "heuristics/localsearch.h"
 
 #include "imgui.h"
+
+
+void Grasp::Metrics::draw()
+{
+	SolutionMetrics::draw();
+	ImGui::Text("Iterations before improvement: %zu", iterations_before_improvement);
+}
+
+void Grasp::Metrics::print_head(std::ostream& os) const
+{
+	SolutionMetrics::print_head(os);
+	os << "it_before_imp";
+}
+
+void Grasp::Metrics::print(std::ostream& os) const
+{
+	SolutionMetrics::print(os);
+	os << ',' << iterations_before_improvement;
+}
 
 Grasp::Grasp(Instance* instance, Algorithm* randomized_construction, LocalSearch* local_search)
 	: instance(instance)

@@ -11,9 +11,12 @@ struct Grasp : public Algorithm
 	Algorithm* randomized_construction;
 	LocalSearch* local_search;
 
-	struct Metrics : SolutionMetrics
+	struct Metrics : public SolutionMetrics
 	{
 		size_t iterations_before_improvement;
+		void draw() override;
+		void print_head(std::ostream& os) const override;
+		void print(std::ostream& os) const override;
 	} metrics;
 	Solution current_best;
 	float best_cost;
@@ -29,12 +32,3 @@ struct Grasp : public Algorithm
 	Solution get_current_solution() override;
 	void draw() override;
 };
-
-
-template<>
-inline void draw<Grasp::Metrics>(Grasp::Metrics& drawable)
-{
-	SolutionMetrics& base = drawable;
-	::draw(base);
-	ImGui::Text("Iterations Before Improvement: %zu", drawable.iterations_before_improvement);
-}

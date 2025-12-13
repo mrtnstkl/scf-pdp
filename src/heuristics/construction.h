@@ -1,16 +1,14 @@
 #pragma once
 
 #include <map>
-#include <set>
-#include <vector>
+#include <ostream>
 #include <unordered_set>
-#include <random>
+#include <vector>
 
-#include "core/instance.h"
-#include "core/solution.h"
 #include "core/algorithm.h"
+#include "core/instance.h"
 #include "core/intermediary.h"
-#include "util/canvas.h"
+#include "core/solution.h"
 
 struct GreedyConstruction : public Algorithm
 {
@@ -24,10 +22,13 @@ struct GreedyConstruction : public Algorithm
 		std::vector<GreedyConstruction::Driver> finished_drivers;
 		std::unordered_set<Node*> unvisited_pickups;
 	};
-	struct Metrics : SolutionMetrics
+	struct Metrics : public SolutionMetrics
 	{
 		size_t accepted_requests, served_requests;
 		std::vector<int> driver_loads;
+		void draw() override;
+		void print_head(std::ostream& os) const override;
+		void print(std::ostream& os) const override;
 	};
 
 	Instance* instance;

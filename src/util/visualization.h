@@ -1,18 +1,17 @@
 #pragma once
 
+#include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <string>
-#include <fstream>
-
 
 #include "core/algorithm.h"
 #include "util/canvas.h"
 #include "util/gui.h"
 #include "util/timer.hpp"
-
 
 #include "imgui.h"
 
@@ -31,6 +30,7 @@ class AlgorithmVisualizer : public GuiElement
 		METRICS,
 		CANVAS
 	} recording_level_ = CANVAS;
+	bool enable_logging_ = true;
 	std::pair<std::string, ImVec4> feedback_ = {"", ImVec4(1.f, 1.f, 1.f, 1.f)};
 
 	/**
@@ -103,18 +103,6 @@ AlgorithmVisualizer<A>::AlgorithmVisualizer(A* algorithm)
 	current_canvas_.stroke_width = .2f;
 }
 
-static void print_metrics_to_file(SolutionMetrics& metrics, uint64_t time_ms)
-{
-	std::ofstream file("metrics_log.txt", std::ios::app);
-	if (file.is_open())
-	{
-		file
-			<< time_ms << ", "
-			<< metrics.step << ", "
-			<< metrics.total_cost << "\n";
-		file.close();
-	}
-}
 
 template <typename A>
 inline void AlgorithmVisualizer<A>::draw()
@@ -140,6 +128,16 @@ inline void AlgorithmVisualizer<A>::draw()
 	// this is safe to run in a separate thread
 	const auto run_to_end = [this](const std::atomic_bool& should_stop)
 	{
+		bool logging = enable_logging_;
+		std::ofstream output_file;
+		if (logging)
+		{
+			output_file.open("out/run_log.csv");
+			output_file << "time,";
+			algorithm_->metrics.print_head(output_file);
+			output_file << std::endl;
+			logging = output_file.is_open();
+		}
 		Timer timer;
 		if (recording_level_ == NONE)
 		{
@@ -154,6 +152,11 @@ inline void AlgorithmVisualizer<A>::draw()
 			{
 				algorithm_->step();
 				record_snapshot(algorithm_->get_current_solution(), algorithm_->metrics, recording_level_);
+				if (logging)
+				{
+					output_file << timer.get<std::chrono::milliseconds>() << ','
+								<< algorithm_->metrics << std::endl;
+				}
 			}
 		}
 		feedback_ = {"Completed in " + timer.get<std::string>(), ImVec4(0.f, 1.f, 0.f, 1.f)};
@@ -162,7 +165,6 @@ inline void AlgorithmVisualizer<A>::draw()
 		if (!canvas_states_.empty())
 			current_canvas_.elements = canvas_states_.rbegin()->second;
 		auto& metrics = algorithm_->metrics;
-		print_metrics_to_file(metrics, timer.get<std::chrono::milliseconds>());
 	};
 
 
@@ -208,6 +210,9 @@ inline void AlgorithmVisualizer<A>::draw()
 		return;
 	}
 
+	ImGui::SameLine();
+	ImGui::Checkbox("Enable Logging", &enable_logging_);
+
 	// Recording Level
 	static const char* levels[] = {"None", "Metrics", "Canvas"};
 	static int level_i = 2;
@@ -240,7 +245,7 @@ inline void AlgorithmVisualizer<A>::draw()
 	if (ImGui::TreeNode("Metrics"))
 	{
 		if (metrics_.contains(position_))
-			::draw<typename A::Metrics>(metrics_.at(position_));
+			metrics_.at(position_).draw();
 		else
 			ImGui::Text("No metrics recorded for this step.");
 		ImGui::TreePop();

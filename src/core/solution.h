@@ -2,9 +2,11 @@
 
 #include <vector>
 #include <list>
+#include <ostream>
 
 #include "instance.h"
 #include "util/canvas.h"
+#include "util/gui.h"
 
 struct Route
 {
@@ -14,15 +16,19 @@ struct Route
 	uint64_t total_distance;
 };
 
-struct SolutionMetrics
+struct SolutionMetrics : public GuiElement
 {
 	size_t step;
 	size_t route_count;
 	float total_cost;
 	float fairness;
 	bool valid;
+	virtual void draw();
+	virtual void print_head(std::ostream& os) const;
+	virtual void print(std::ostream& os) const;
 };
 
+std::ostream& operator<<(std::ostream& os, const SolutionMetrics& metrics);
 
 struct Solution
 {
@@ -122,15 +128,3 @@ struct DeltaCalculator
 	float cost() const;
 	float cost(float fairness) const;
 };
-
-
-#include "imgui.h"
-template<>
-inline void draw<SolutionMetrics>(SolutionMetrics& drawable)
-{
-	ImGui::Text("Route Count: %zu", drawable.route_count);
-	ImGui::Text("Total Cost: %.2f", drawable.total_cost);
-	ImGui::Text("Fairness: %.4f", drawable.fairness);
-	ImGui::Text("Valid: %s", drawable.valid ? "Yes" : "No");
-	ImGui::Text("Steps: %zu", drawable.step);
-}
