@@ -12,7 +12,7 @@
 
 struct GreedyConstruction : public Algorithm
 {
-	using Driver = Driver;
+	using Driver = ::Driver;
 	struct State
 	{
 		size_t step;

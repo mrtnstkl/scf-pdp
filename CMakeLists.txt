@@ -17,7 +17,7 @@ endif()
 if (MSVC)
     add_compile_options(/W4 /permissive-)
 else()
-    add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter -fexceptions -fpermissive)
+    add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter -fexceptions)
 endif()
 
 # -----------------------

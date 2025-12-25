@@ -84,7 +84,7 @@ void AlgorithmVisualizer<A>::record_snapshot(
 	if (level >= CANVAS)
 	{
 		Canvas temp_canvas;
-		soln.draw(temp_canvas);
+		soln.visualize(temp_canvas);
 		canvas_states_[position_] = temp_canvas.elements;
 	}
 }
@@ -95,7 +95,7 @@ AlgorithmVisualizer<A>::AlgorithmVisualizer(A* algorithm)
 	: algorithm_(algorithm)
 {
 	const float width_target = 560.f;
-	algorithm->get_current_solution().draw(current_canvas_);
+	algorithm->get_current_solution().visualize(current_canvas_);
 	auto [max_x, max_y] = current_canvas_.get_max_extent();
 	current_canvas_.scale = width_target / max_x;
 	current_canvas_.width = width_target;

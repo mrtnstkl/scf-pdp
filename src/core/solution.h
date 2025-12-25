@@ -4,7 +4,6 @@
 #include <list>
 #include <ostream>
 
-#include "instance.h"
 #include "util/canvas.h"
 #include "util/gui.h"
 
@@ -30,23 +29,14 @@ struct SolutionMetrics : public GuiElement
 
 std::ostream& operator<<(std::ostream& os, const SolutionMetrics& metrics);
 
+struct Instance;
+
 struct Solution
 {
 	Instance* instance;
 	std::vector<Route> routes;
 
 	Solution(Instance* instance, bool init = false);
-
-	/** 
-	 * @brief Calculate the total time (distance) of a given route
-	 * 
-	 * Uses the instance's distance matrix.
-	 * TODO: maybe move this to Instance?
-	 * 
-	 * @param route The route to calculate the time for
-	 * @return int The total time (distance) of the route
-	 */
-	uint64_t calculate_route_time(const Route& route) const;
 
 	float calculate_jain_fairness() const;
 
@@ -64,10 +54,29 @@ struct Solution
 
 	void print() const;
 
-	void draw(Canvas& canvas) const;
+	/**
+	 * @brief Draw the solution onto a canvas
+	 * 
+	 * @param canvas The canvas to draw on
+	 */
+	void visualize(Canvas& canvas) const;
 
+	/**
+	 * @brief Write the solution to a file
+	 * 
+	 * @param filename The path to the solution file
+	 * @param comment The first line of the solution file
+	 */
 	void write_to_file(const char* filename, const char* comment = "solution") const;
 
+	/** 
+	 * @brief Load a solution from a file
+	 * 
+	 * @param path The path to the solution file
+	 * @param instance The instance the solution belongs to
+	 * @return Solution The loaded solution
+	 * @throws std::runtime_error if the file could not be opened
+	 */
 	static Solution load_from_file(const char* path, Instance* instance);
 };
 
@@ -127,4 +136,5 @@ struct DeltaCalculator
 	float fairness() const;
 	float cost() const;
 	float cost(float fairness) const;
+	std::pair<float, float> cost_with_fairness() const;
 };

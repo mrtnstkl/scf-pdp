@@ -4,6 +4,7 @@
 #include <span>
 
 #include "core/primitives.h"
+#include "core/solution.h"
 #include "util/canvas.h"
 
 struct CustomerRequest
@@ -86,6 +87,14 @@ public:
 	 * @return uint64_t The index of the node
 	 */
 	uint64_t get_index(const Node* node) const;
+
+	/** 
+	 * @brief Calculate the total time (distance) of a given route using the distance matrix
+	 * 
+	 * @param route The route to calculate the time for
+	 * @return int The total time (distance) of the route
+	 */
+	uint64_t calculate_route_time(const Route& route) const;
 
 	/**
 	 * @brief Load an instance from a file

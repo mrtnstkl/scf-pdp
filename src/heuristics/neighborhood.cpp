@@ -8,10 +8,6 @@
 #include <iostream>
 #include <numeric>
 
-void apply_move_to_solution(Solution& sol, int from_driver_id, int to_driver_id,
-	const Node* pickupNode, const Node* dropoffNode, Node* p_before, Node* p_after, Node* d_before,
-	Node* d_after);
-
 Neighborhood::Neighborhood(const Solution& initial_solution)
 	: initial_solution_(initial_solution)
 {
@@ -37,10 +33,10 @@ MoveRequestWithinRouteNeighborhood::NodeMover::NodeMover(const std::vector<Node*
 	: route(route)
 	, route_id(route_id)
 	, idx(idx)
+	, terminator(terminator)
 	, delta(delta)
 	, load(load)
 	, max_load(max_load)
-	, terminator(terminator)
 {
 }
 
@@ -234,7 +230,7 @@ Solution MoveRequestWithinRouteNeighborhood::get()
 
 	Solution sol = initial_solution_;
 	sol.routes[route_id].nodes = std::list<Node*>(mover.route.begin(), mover.route.end());
-	sol.routes[route_id].total_distance = sol.calculate_route_time(sol.routes[route_id]);
+	sol.routes[route_id].total_distance = instance_->calculate_route_time(sol.routes[route_id]);
 	return sol;
 }
 
@@ -242,6 +238,41 @@ bool MoveRequestWithinRouteNeighborhood::has_next() { return !done_; }
 
 
 //=============================================================
+
+
+void apply_move_to_solution(Solution& sol, int from_driver_id, int to_driver_id,
+	const Node* pickupNode, const Node* dropoffNode, Node* p_before, Node* p_after, Node* d_before,
+	Node* d_after)
+{
+	// --- REMOVE from old route ---
+	auto& from_list = sol.routes[from_driver_id].nodes;
+	from_list.remove(const_cast<Node*>(pickupNode));
+	from_list.remove(const_cast<Node*>(dropoffNode));
+
+	// --- INSERT pickup ---
+	auto& to_list = sol.routes[to_driver_id].nodes;
+
+	auto insert_after = [&](Node* before, Node* node)
+	{
+		if (before == nullptr)
+		{
+			to_list.push_front(node);
+			return;
+		}
+		auto it = std::find(to_list.begin(), to_list.end(), before);
+		++it;
+		to_list.insert(it, node);
+	};
+
+	insert_after(p_before, const_cast<Node*>(pickupNode));
+	insert_after(d_before, const_cast<Node*>(dropoffNode));
+
+	// --- Recompute route distances (you don’t care about efficiency) ---
+	sol.routes[from_driver_id].total_distance =
+		sol.instance->calculate_route_time(sol.routes[from_driver_id]);
+
+	sol.routes[to_driver_id].total_distance = sol.instance->calculate_route_time(sol.routes[to_driver_id]);
+}
 
 
 MoveRequestToAnotherRouteNeighborhood::MoveRequestToAnotherRouteNeighborhood(
@@ -409,55 +440,20 @@ float MoveRequestToAnotherRouteNeighborhood::next()
 
 Solution MoveRequestToAnotherRouteNeighborhood::get()
 {
+	Solution sol = current_solution_;
 	if (!last_move_.valid)
 	{
-		return current_solution_;
+		return sol;
 	}
 
-	Solution sol = current_solution_;
 	apply_move_to_solution(sol, last_move_.from_driver_id, last_move_.to_driver_id,
 		last_move_.pickupNode, last_move_.dropoffNode, last_move_.p_before, last_move_.p_after,
 		last_move_.d_before, last_move_.d_after);
-
 
 	return sol;
 }
 
 bool MoveRequestToAnotherRouteNeighborhood::has_next() { return !done_; }
-
-void apply_move_to_solution(Solution& sol, int from_driver_id, int to_driver_id,
-	const Node* pickupNode, const Node* dropoffNode, Node* p_before, Node* p_after, Node* d_before,
-	Node* d_after)
-{
-	// --- REMOVE from old route ---
-	auto& from_list = sol.routes[from_driver_id].nodes;
-	from_list.remove(const_cast<Node*>(pickupNode));
-	from_list.remove(const_cast<Node*>(dropoffNode));
-
-	// --- INSERT pickup ---
-	auto& to_list = sol.routes[to_driver_id].nodes;
-
-	auto insert_after = [&](Node* before, Node* node)
-	{
-		if (before == nullptr)
-		{
-			to_list.push_front(node);
-			return;
-		}
-		auto it = std::find(to_list.begin(), to_list.end(), before);
-		++it;
-		to_list.insert(it, node);
-	};
-
-	insert_after(p_before, const_cast<Node*>(pickupNode));
-	insert_after(d_before, const_cast<Node*>(dropoffNode));
-
-	// --- Recompute route distances (you don’t care about efficiency) ---
-	sol.routes[from_driver_id].total_distance =
-		sol.calculate_route_time(sol.routes[from_driver_id]);
-
-	sol.routes[to_driver_id].total_distance = sol.calculate_route_time(sol.routes[to_driver_id]);
-}
 
 
 //=============================================================
@@ -728,12 +724,12 @@ float SwapRequestsBetweenRoutesNeighborhood::next()
 
 Solution SwapRequestsBetweenRoutesNeighborhood::get()
 {
+	Solution sol = current_solution_;
 	if (!last_move_A.valid || !last_move_B.valid)
 	{
-		return current_solution_;
+		return sol;
 	}
 
-	Solution sol = current_solution_;
 	apply_move_to_solution(sol, last_move_A.from_driver_id, last_move_A.to_driver_id,
 		last_move_A.pickupNode, last_move_A.dropoffNode, last_move_A.p_before, last_move_A.p_after,
 		last_move_A.d_before, last_move_A.d_after);

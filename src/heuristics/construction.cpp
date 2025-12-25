@@ -69,14 +69,14 @@ Solution GreedyConstruction::get_current_solution()
 		metrics.driver_loads[driver.id] = driver.load;
 		Route& route = sol.routes.at(driver.id);
 		route.nodes = {driver.path.begin(), driver.path.end()};
-		route.total_distance = sol.calculate_route_time(route);
+		route.total_distance = instance->calculate_route_time(route);
 	}
 	for (auto& driver : state.finished_drivers)
 	{
 		metrics.driver_loads[driver.id] = driver.load;
 		Route& route = sol.routes.at(driver.id);
 		route.nodes = {driver.path.begin(), driver.path.end()};
-		route.total_distance = sol.calculate_route_time(route);
+		route.total_distance = instance->calculate_route_time(route);
 	}
 	sol.calculate_metrics(metrics);
 	return sol;

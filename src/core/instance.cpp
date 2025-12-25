@@ -80,6 +80,20 @@ uint64_t Instance::get_index(const Node* node) const
 	return node - nodes.data();
 }
 
+uint64_t Instance::calculate_route_time(const Route& route) const
+{
+	if (route.nodes.empty())
+		return 0;
+
+	uint64_t total = get_distance(route.nodes.front()) + get_distance(route.nodes.back());
+	if (route.nodes.size() == 1)
+		return total;
+
+	for (auto it = route.nodes.begin(); it != std::prev(route.nodes.end()); ++it)
+		total += get_distance(*it, *std::next(it));
+	return total;
+}
+
 Instance Instance::load_from_file(const char* filename)
 {
 	std::ifstream file(filename);

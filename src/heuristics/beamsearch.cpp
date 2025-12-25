@@ -127,7 +127,7 @@ Solution BeamSearch::get_current_solution()
 		Route route;
 		route.depot = instance->depot;
 		route.nodes = {driver.path.begin(), driver.path.end()};
-		route.total_distance = solution.calculate_route_time(route);
+		route.total_distance = instance->calculate_route_time(route);
 		solution.routes.push_back(std::move(route));
 	}
 	solution.calculate_metrics(metrics);

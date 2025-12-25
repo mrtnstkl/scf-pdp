@@ -3,6 +3,7 @@
 #include <chrono>
 #include <functional>
 #include <thread>
+#include <cassert>
 
 #ifndef SCFPDP_HEADLESS
 #include "imgui.h"
@@ -74,7 +75,8 @@ bool StoppingCriterion::should_stop(float solution_cost)
 			return ++stagnation_counter >= stagnation_limit;
 		}
 	default:
-		break;
+		assert(false && "Unknown stopping criterion type");
+		return false;
 	}
 }
 

@@ -8,6 +8,8 @@
 #include <unordered_set>
 #include <numeric>
 
+#include "core/instance.h"
+
 #ifndef SCFPDP_HEADLESS
 #include "imgui.h"
 #endif // SCFPDP_HEADLESS
@@ -52,22 +54,6 @@ Solution::Solution(Instance* instance, bool init)
 	routes.resize(instance->vehicle_count);
 	for (auto& route : routes)
 		route.depot = instance->depot;
-}
-
-uint64_t Solution::calculate_route_time(const Route& route) const
-{
-	if (route.nodes.empty())
-		return 0;
-
-	uint64_t total = instance->get_distance(route.nodes.front()) + instance->get_distance(route.nodes.back());
-	if (route.nodes.size() == 1)
-		return total;
-
-	for (auto it = route.nodes.begin(); it != std::prev(route.nodes.end()); ++it)
-	{
-		total += instance->get_distance(*it, *std::next(it));
-	}
-	return total;
 }
 
 float Solution::calculate_jain_fairness() const
@@ -162,7 +148,7 @@ void Solution::print() const
 	}
 }
 
-void Solution::draw(Canvas& canvas) const
+void Solution::visualize(Canvas& canvas) const
 {
 	instance->draw(canvas, true);
 	Color::random(123);
@@ -245,7 +231,7 @@ Solution Solution::load_from_file(const char* path, Instance* instance)
 			route.nodes.push_back(node);
 		}
 		// compute route distance and store
-		route.total_distance = sol.calculate_route_time(route);
+		route.total_distance = instance->calculate_route_time(route);
 		sol.routes.push_back(std::move(route));
 	}
 	return sol;
@@ -260,12 +246,11 @@ DeltaCalculator::DeltaCalculator(Instance* instance)
 DeltaCalculator::DeltaCalculator(Instance* instance, const Solution& solution)
 	: DeltaCalculator(instance)
 {
-	const int n = instance->request_count;
 	route_sum = 0;
 	for (size_t i = 0; i < solution.routes.size(); ++i)
 	{
 		const Route& route = solution.routes[i];
-		auto d = solution.calculate_route_time(route);
+		const auto d = instance->calculate_route_time(route);
 		route_sum += d;
 		route_squares[i] = d * d;
 	}
@@ -423,4 +408,10 @@ float DeltaCalculator::cost() const
 float DeltaCalculator::cost(float fairness) const
 {
 	return route_sum + instance->fairness * (1.f - fairness);
+}
+
+std::pair<float, float> DeltaCalculator::cost_with_fairness() const
+{
+	const float f = fairness();
+	return { cost(f), f };
 }
