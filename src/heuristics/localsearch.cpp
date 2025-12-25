@@ -1,13 +1,18 @@
 #include "heuristics/localsearch.h"
 
 #include <filesystem>
+#include <cassert>
 
+#ifndef SCFPDP_HEADLESS
 #include "imgui.h"
+#endif // SCFPDP_HEADLESS
 
 void LocalSearch::Metrics::draw()
 {
+#ifndef SCFPDP_HEADLESS
 	SolutionMetrics::draw();
 	ImGui::Text("Neighborhood Type: %d", neighborhood_type);
+#endif // SCFPDP_HEADLESS
 }
 
 void LocalSearch::Metrics::print_head(std::ostream& os) const
@@ -113,6 +118,7 @@ Solution LocalSearch::get_current_solution() { return current_solution_; }
 
 void LocalSearch::draw()
 {
+#ifndef SCFPDP_HEADLESS
 	static const char* neighborhood_labels[]{"Move Request To Another Route",
 		"Swap Requests Between Routes", "Move Request Within Route"};
 	ImGui::Combo(
@@ -128,4 +134,5 @@ void LocalSearch::draw()
 			initial_solution_ =
 				Solution::load_from_file("solutions/current_solution.sln", instance_);
 	}
+#endif // SCFPDP_HEADLESS
 }

@@ -13,6 +13,7 @@
 #include "util/canvas.h"
 #include "util/visualization.h"
 
+#ifndef SCFPDP_HEADLESS
 #include "imgui.h"
 
 int gui_application(std::vector<std::string> args)
@@ -73,6 +74,7 @@ int gui_application(std::vector<std::string> args)
 	gui.close();
 	return 0;
 }
+#endif // SCFPDP_HEADLESS
 
 
 int main(int argc, char* argv[])
@@ -93,7 +95,9 @@ int main(int argc, char* argv[])
 	if (args.size() < 2)
 	{
 		std::cerr << "Usage:\n"
+#ifndef SCFPDP_HEADLESS
 			<< "  " << args[0] << " <instance>        (launches GUI)\n"
+#endif
 			<< "  " << usage_greedy << "\n"
 			<< "  " << usage_greedy_rand << "\n"
 			<< "  " << usage_random << "\n"
@@ -104,7 +108,14 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 	else if (args.size() == 2)
-		return gui_application(args);
+	{
+#ifdef SCFPDP_HEADLESS
+	std::cerr << "GUI unavailable in headless build.\n";
+	return 1;
+#else
+	return gui_application(args);
+#endif
+	}
 	
 	auto arg = args.begin() + 1;
 	const std::string opt_algo = *(arg++);

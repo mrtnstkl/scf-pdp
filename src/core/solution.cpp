@@ -8,15 +8,19 @@
 #include <unordered_set>
 #include <numeric>
 
+#ifndef SCFPDP_HEADLESS
 #include "imgui.h"
+#endif // SCFPDP_HEADLESS
 
 void SolutionMetrics::draw()
 {
+#ifndef SCFPDP_HEADLESS
 	ImGui::Text("Step: %zu", step);
     ImGui::Text("Route Count: %zu", route_count);
 	ImGui::Text("Total Cost: %.2f", total_cost);
 	ImGui::Text("Fairness: %.4f", fairness);
 	ImGui::Text("Valid: %s", valid ? "Yes" : "No");
+#endif // SCFPDP_HEADLESS
 }
 
 void SolutionMetrics::print_head(std::ostream& os) const

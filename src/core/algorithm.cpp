@@ -4,7 +4,9 @@
 #include <functional>
 #include <thread>
 
+#ifndef SCFPDP_HEADLESS
 #include "imgui.h"
+#endif // SCFPDP_HEADLESS
 
 Algorithm::~Algorithm() { worker.stop(); }
 
@@ -78,6 +80,7 @@ bool StoppingCriterion::should_stop(float solution_cost)
 
 void StoppingCriterion::draw()
 {
+#ifndef SCFPDP_HEADLESS
 	if (ImGui::SmallButton("Reset"))
 		reset();
 
@@ -107,6 +110,7 @@ void StoppingCriterion::draw()
 	default:
 		break;
 	}
+#endif // SCFPDP_HEADLESS
 }
 
 void StoppingCriterion::reset()

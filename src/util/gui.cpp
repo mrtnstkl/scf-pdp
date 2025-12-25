@@ -1,4 +1,5 @@
 #include "util/gui.h"
+#ifndef SCFPDP_HEADLESS
 
 #include <variant>
 #include <functional>
@@ -201,3 +202,5 @@ void Gui::close()
 	glfwDestroyWindow(window_);
 	glfwTerminate();
 }
+
+#endif // SCFPDP_HEADLESS

@@ -1,8 +1,8 @@
 #include "heuristics/vnd.h"
-#include "vnd.h"
 
 #include <filesystem>
 #include <iostream>
+#include <cassert>
 
 VariableNeighborhoodDescent::VariableNeighborhoodDescent(Instance* instance)
 	: LocalSearch(instance)
@@ -73,10 +73,12 @@ void VariableNeighborhoodDescent::reset()
 
 void VariableNeighborhoodDescent::draw()
 {
+#ifndef SCFPDP_HEADLESS
 	if (ImGui::Button("Load Solution from File"))
 	{
 		if (std::filesystem::exists("solutions/current_solution.sln"))
 			initial_solution_ =
 				Solution::load_from_file("solutions/current_solution.sln", instance_);
 	}
+#endif // SCFPDP_HEADLESS
 }

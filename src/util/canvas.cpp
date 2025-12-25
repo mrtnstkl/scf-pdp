@@ -5,8 +5,9 @@
 #include <cstdint>
 #include <random>
 
+#ifndef SCFPDP_HEADLESS
 #include "imgui.h"
-
+#endif // SCFPDP_HEADLESS
 
 void Canvas::clear()
 {
@@ -43,6 +44,7 @@ std::pair<int, int> Canvas::get_max_extent() const
 
 void Canvas::draw()
 {
+#ifndef SCFPDP_HEADLESS
 	const ImVec2 p = ImGui::GetCursorScreenPos();
 	const auto px = p.x;
 	const auto py = p.y;
@@ -85,6 +87,7 @@ void Canvas::draw()
 		}, element);
 	}
 	ImGui::Dummy(ImVec2(width, height));
+#endif // SCFPDP_HEADLESS
 }
 
 Color Color::random(unsigned seed)

@@ -1,5 +1,8 @@
 #include "heuristics/beamsearch.h"
-#include "beamsearch.h"
+
+#ifndef SCFPDP_HEADLESS
+#include "imgui.h"
+#endif // SCFPDP_HEADLESS
 
 float BeamSearch::TreeNode::heuristic_cost() const
 {
@@ -134,5 +137,7 @@ Solution BeamSearch::get_current_solution()
 
 void BeamSearch::draw()
 {
+#ifndef SCFPDP_HEADLESS
 	ImGui::SliderInt("Beam Width", &beam_width, 1, 20);
+#endif // SCFPDP_HEADLESS
 }

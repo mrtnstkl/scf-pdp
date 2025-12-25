@@ -10,16 +10,20 @@
 #include <unordered_set>
 
 #include "core/solution.h"
-#include "imgui.h"
 
+#ifndef SCFPDP_HEADLESS
+#include "imgui.h"
+#endif // SCFPDP_HEADLESS
 
 void GreedyConstruction::Metrics::draw()
 {
+#ifndef SCFPDP_HEADLESS
 	SolutionMetrics::draw();
 	ImGui::Text("Accepted Requests: %zu", accepted_requests);
 	ImGui::Text("Served Requests: %zu", served_requests);
 	for (size_t i = 0; i < driver_loads.size(); ++i)
 		ImGui::Text("Driver %zu Load: %d", i, driver_loads[i]);
+#endif // SCFPDP_HEADLESS
 }
 
 void GreedyConstruction::Metrics::print_head(std::ostream& os) const
@@ -320,8 +324,10 @@ size_t GreedyRandomizedClosest::step()
 
 void GreedyRandomizedClosest::draw()
 {
+#ifndef SCFPDP_HEADLESS
 	ImGui::SliderInt("Candidates Count", &candidates_count, 1, 5);
 	ImGui::SliderInt("Tightening Interval", &tightening_interval, 1, 50);
+#endif // SCFPDP_HEADLESS
 }
 
 
@@ -436,7 +442,9 @@ size_t GreedyNearestWeighted::step()
 
 void GreedyNearestWeighted::draw()
 {
+#ifndef SCFPDP_HEADLESS
 	ImGui::Text("Mean Distance: %f", mean_distance_);
 	ImGui::SliderFloat("Dropoff Bias", &dropoff_bias_, .2f, 20.f);
+#endif // SCFPDP_HEADLESS
 }
 

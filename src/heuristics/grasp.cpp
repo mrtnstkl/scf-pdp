@@ -2,13 +2,16 @@
 #include "core/solution.h"
 #include "heuristics/localsearch.h"
 
+#ifndef SCFPDP_HEADLESS
 #include "imgui.h"
-
+#endif // SCFPDP_HEADLESS
 
 void Grasp::Metrics::draw()
 {
+#ifndef SCFPDP_HEADLESS
 	SolutionMetrics::draw();
 	ImGui::Text("Iterations before improvement: %zu", iterations_before_improvement);
+#endif // SCFPDP_HEADLESS
 }
 
 void Grasp::Metrics::print_head(std::ostream& os) const
@@ -91,6 +94,7 @@ Solution Grasp::get_current_solution() { return current_best; }
 
 void Grasp::draw()
 {
+#ifndef SCFPDP_HEADLESS
 	ImGui::SeparatorText("Randomized Construction Heuristic");
 	randomized_construction->draw();
 
@@ -99,4 +103,5 @@ void Grasp::draw()
 
 	ImGui::SeparatorText("Stopping Criterion");
 	stopping_criterion.draw();
+#endif // SCFPDP_HEADLESS
 }

@@ -58,11 +58,3 @@ public:
 
 	void draw() override;
 };
-
-template<>
-inline void draw<LocalSearch::Metrics>(LocalSearch::Metrics& drawable)
-{
-	SolutionMetrics& base = drawable;
-	draw(base);
-	ImGui::Text("Current Neighborhood: N_%d", drawable.neighborhood_type);
-}

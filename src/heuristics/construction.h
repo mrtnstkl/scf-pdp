@@ -45,21 +45,6 @@ struct GreedyConstruction : public Algorithm
 	virtual size_t step() = 0;
 };
 
-template<>
-inline void draw<GreedyConstruction::Metrics>(GreedyConstruction::Metrics& drawable)
-{
-	SolutionMetrics& base = drawable;
-	draw(base);
-	ImGui::Text("Step: %zu", drawable.step);
-	ImGui::Text("Accepted Requests: %zu", drawable.accepted_requests);
-	ImGui::Text("Served Requests: %zu", drawable.served_requests);
-	for (size_t i = 0; i < drawable.driver_loads.size(); ++i)
-	{
-		ImGui::Text("Driver %zu Load: %d", i, drawable.driver_loads[i]);
-	}
-}
-
-
 struct RandomConstruction : public GreedyConstruction
 {
 	RandomConstruction(Instance* instance)

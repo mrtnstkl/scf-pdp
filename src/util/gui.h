@@ -3,8 +3,6 @@
 #include <vector>
 #include <variant>
 #include <functional>
-#include <GLFW/glfw3.h>
-#include "imgui.h"
 
 struct GuiElement
 {
@@ -12,12 +10,10 @@ struct GuiElement
 	virtual ~GuiElement() = default;
 };
 
-template<typename T>
-inline void draw(T& drawable)
-{
-	// this specialization covers all GuiElement derived types
-	drawable.draw();
-}
+
+#ifndef SCFPDP_HEADLESS
+#include <GLFW/glfw3.h>
+#include "imgui.h"
 
 class Gui
 {
@@ -43,3 +39,4 @@ public:
 	void close();
 };
 
+#endif // SCFPDP_HEADLESS

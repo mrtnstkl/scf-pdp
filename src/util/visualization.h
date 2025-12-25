@@ -1,4 +1,5 @@
 #pragma once
+#ifndef SCFPDP_HEADLESS
 
 #include <chrono>
 #include <filesystem>
@@ -273,3 +274,5 @@ inline void AlgorithmVisualizer<A>::draw()
 		feedback_ = {"Saved canvas to " + file, ImVec4(0.f, 1.f, 0.f, 1.f)};
 	}
 }
+
+#endif // SCFPDP_HEADLESS
