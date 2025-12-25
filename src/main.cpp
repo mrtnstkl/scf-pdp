@@ -5,7 +5,6 @@
 
 #include "core/instance.h"
 #include "core/solution.h"
-#include "heuristics/annealing.h"
 #include "heuristics/beamsearch.h"
 #include "heuristics/construction.h"
 #include "heuristics/grasp.h"
@@ -28,7 +27,6 @@ int gui_application(std::vector<std::string> args)
 	auto lsearch = LocalSearch(&instance);
 	auto vnd = VariableNeighborhoodDescent(&instance);
 	auto grasp = Grasp(&instance, std::make_unique<GreedyRandomizedClosest>(&instance), std::make_unique<LocalSearch>(&instance));
-	auto annealing =  Annealing(&instance);
 
 	auto algorithms = std::array{
 		AlgorithmGui("Greedy Nearest Any", &dcon),
