@@ -23,10 +23,10 @@ void Grasp::Metrics::print(std::ostream& os) const
 	os << ',' << iterations_before_improvement;
 }
 
-Grasp::Grasp(Instance* instance, Algorithm* randomized_construction, LocalSearch* local_search)
+Grasp::Grasp(Instance* instance, std::unique_ptr<Algorithm> randomized_construction, std::unique_ptr<LocalSearch> local_search)
 	: instance(instance)
-	, randomized_construction(randomized_construction)
-	, local_search(local_search)
+	, randomized_construction(std::move(randomized_construction))
+	, local_search(std::move(local_search))
 	, current_best(Solution(instance))
 {
 	reset();

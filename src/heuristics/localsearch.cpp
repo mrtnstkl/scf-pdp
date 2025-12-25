@@ -25,18 +25,18 @@ void LocalSearch::Metrics::print(std::ostream& os) const
 LocalSearch::LocalSearch(Instance* instance)
 	: instance_(instance), initial_solution_(instance, true), current_solution_(initial_solution_)
 {
-	improvement_strategy_ = FIRST_IMPROVEMENT;
-	neighborhood_type_ = MOVE_REQUEST_WITHIN_ROUTE;
+	improvement_strategy = FIRST_IMPROVEMENT;
+	neighborhood_type = MOVE_REQUEST_WITHIN_ROUTE;
 
-	if (std::filesystem::exists("solutions/current_solution.sln"))
-		initial_solution_ = Solution::load_from_file("solutions/current_solution.sln", instance);
+	//if (std::filesystem::exists("solutions/current_solution.sln"))
+	//	initial_solution_ = Solution::load_from_file("solutions/current_solution.sln", instance);
 	reset();
 }
 
 size_t LocalSearch::step()
 {
 	std::unique_ptr<Neighborhood> neighborhood;
-	switch (neighborhood_type_)
+	switch (neighborhood_type)
 	{
 	case MOVE_REQUEST_WITHIN_ROUTE:
 		neighborhood =
@@ -53,10 +53,10 @@ size_t LocalSearch::step()
 	default:
 		assert(false && "Unknown neighborhood type");
 	}
-	metrics.neighborhood_type = int(neighborhood_type_);
+	metrics.neighborhood_type = int(neighborhood_type);
 
 	bool improvement_found = false;
-	if (improvement_strategy_ == FIRST_IMPROVEMENT)
+	if (improvement_strategy == FIRST_IMPROVEMENT)
 	{
 		while (neighborhood->has_next())
 		{
@@ -69,7 +69,7 @@ size_t LocalSearch::step()
 			break;
 		}
 	}
-	else if (improvement_strategy_ == BEST_IMPROVEMENT)
+	else if (improvement_strategy == BEST_IMPROVEMENT)
 	{
 		while (neighborhood->has_next())
 		{
@@ -116,11 +116,11 @@ void LocalSearch::draw()
 	static const char* neighborhood_labels[]{"Move Request To Another Route",
 		"Swap Requests Between Routes", "Move Request Within Route"};
 	ImGui::Combo(
-		"Neighborhood", reinterpret_cast<int*>(&neighborhood_type_), neighborhood_labels, 3);
+		"Neighborhood", reinterpret_cast<int*>(&neighborhood_type), neighborhood_labels, 3);
 
 	static const char* strat_labels[]{"First", "Best"};
 	ImGui::Combo(
-		"Improvement Strat", reinterpret_cast<int*>(&improvement_strategy_), strat_labels, 2);
+		"Improvement Strat", reinterpret_cast<int*>(&improvement_strategy), strat_labels, 2);
 
 	if (ImGui::Button("Load Solution from File"))
 	{

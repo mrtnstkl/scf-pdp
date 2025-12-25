@@ -30,6 +30,8 @@ struct Algorithm : public GuiElement
 	virtual Solution get_current_solution() = 0;
 
 	void draw() override = 0;
+
+	static Solution run(Algorithm& algorithm);
 };
 
 struct StoppingCriterion : public GuiElement

@@ -8,8 +8,8 @@
 struct Grasp : public Algorithm
 {
 	Instance* instance;
-	Algorithm* randomized_construction;
-	LocalSearch* local_search;
+	std::unique_ptr<Algorithm> randomized_construction;
+	std::unique_ptr<LocalSearch> local_search;
 
 	struct Metrics : public SolutionMetrics
 	{
@@ -24,7 +24,7 @@ struct Grasp : public Algorithm
 	StoppingCriterion stopping_criterion;
 	bool finished = false;
 
-	Grasp(Instance* instance, Algorithm* randomized_construction, LocalSearch* local_search);
+	Grasp(Instance* instance, std::unique_ptr<Algorithm> randomized_construction, std::unique_ptr<LocalSearch> local_search);
 
 	size_t step() override;
 	void reset() override;

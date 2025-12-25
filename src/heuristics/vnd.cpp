@@ -15,7 +15,7 @@ size_t VariableNeighborhoodDescent::step()
 
 	std::unique_ptr<Neighborhood> neighborhood;
 
-	switch (neighborhood_type_)
+	switch (neighborhood_type)
 	{
 	case MOVE_REQUEST_WITHIN_ROUTE:
 		neighborhood =
@@ -47,18 +47,18 @@ size_t VariableNeighborhoodDescent::step()
 
 	if (improvement_found)
 	{
-		std::cout << "VND Improvement found in N_" << neighborhood_type_
+		std::cout << "VND Improvement found in N_" << neighborhood_type
 				  << " (cost: " << current_cost_ << ")\n";
 		metrics.step++;
 		current_solution_.calculate_metrics(metrics);
-		metrics.neighborhood_type = int(neighborhood_type_);
-		neighborhood_type_ = NeighborhoodType(0); // restart with first neighborhood
+		metrics.neighborhood_type = int(neighborhood_type);
+		neighborhood_type = NeighborhoodType(0); // restart with first neighborhood
 	}
 	else
 	{
 		// move to next neighborhood
-		neighborhood_type_ = NeighborhoodType(int(neighborhood_type_) + 1);
-		if (neighborhood_type_ == LocalSearch::NeighborhoodType::ENUM_COUNT)
+		neighborhood_type = NeighborhoodType(int(neighborhood_type) + 1);
+		if (neighborhood_type == LocalSearch::NeighborhoodType::ENUM_COUNT)
 			done_ = true; // completed all neighborhood types
 	}
 
@@ -68,7 +68,7 @@ size_t VariableNeighborhoodDescent::step()
 void VariableNeighborhoodDescent::reset()
 {
 	LocalSearch::reset();
-	neighborhood_type_ = LocalSearch::NeighborhoodType(0);
+	neighborhood_type = LocalSearch::NeighborhoodType(0);
 }
 
 void VariableNeighborhoodDescent::draw()

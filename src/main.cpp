@@ -16,18 +16,9 @@
 
 #include "imgui.h"
 
-int main(int argc, char* argv[])
+int gui_application(std::vector<std::string> args)
 {
-	std::vector<std::string> args(argv, argv + argc);
-
-	if (args.size() != 2)
-	{
-		std::cerr << "Usage: " << args[0] << " <instance_file>" << std::endl;
-		return 1;
-	}
-
 	Instance instance = Instance::load_from_file(args[1].c_str());
-	//instance.print();
 
 	auto dcon = GreedyNearestAny(&instance);
 	auto gcon = GreedyRandomizedClosest(&instance);
@@ -36,9 +27,7 @@ int main(int argc, char* argv[])
 	auto bsearch = BeamSearch(&instance);
 	auto lsearch = LocalSearch(&instance);
 	auto vnd = VariableNeighborhoodDescent(&instance);
-	auto grasp_construction = GreedyRandomizedClosest(&instance);
-	auto grasp_localsearch = LocalSearch(&instance);
-	auto grasp = Grasp(&instance, &grasp_construction, &grasp_localsearch);
+	auto grasp = Grasp(&instance, std::make_unique<GreedyRandomizedClosest>(&instance), std::make_unique<LocalSearch>(&instance));
 	auto annealing =  Annealing(&instance);
 
 	auto algorithms = std::array{
@@ -50,7 +39,6 @@ int main(int argc, char* argv[])
 		AlgorithmGui("Local Search", &lsearch),
 		AlgorithmGui("Variable Neighborhood Descent", &vnd),
 		AlgorithmGui("GRASP", &grasp),
-		AlgorithmGui("Simulated Annealing", &annealing)
 	};
 
 	Gui gui;
@@ -85,6 +73,154 @@ int main(int argc, char* argv[])
 		gui.update();
 	}
 	gui.close();
+	return 0;
+}
 
+
+int main(int argc, char* argv[])
+{
+	std::vector<std::string> args(argv, argv + argc);
+	for (auto& arg : args)
+		std::cout << arg << " ";
+	std::cout << std::endl;
+
+	auto usage_greedy = args[0] + " greedy <instance>";
+	auto usage_greedy_rand = args[0] + " greedy_rand <instance> <candidates> <tightening>";
+	auto usage_random = args[0] + " random <instance>";
+	auto usage_beam = args[0] + " beam <instance> <beam_width>";
+	auto usage_localsearch = args[0] + " localsearch <instance> <initial_solution> <neighborhood_type> <strategy (\"first\"|\"best\")>";
+	auto usage_vnd = args[0] + " vnd <instance> <initial_solution>";
+	auto usage_grasp = args[0] + " grasp <instance> <candidates> <tightening> <neighborhood_type> <strategy (\"first\"|\"best\")> <stagnation_limit>";
+
+	if (args.size() < 2)
+	{
+		std::cerr << "Usage:\n"
+			<< "  " << args[0] << " <instance>        (launches GUI)\n"
+			<< "  " << usage_greedy << "\n"
+			<< "  " << usage_greedy_rand << "\n"
+			<< "  " << usage_random << "\n"
+			<< "  " << usage_beam << "\n"
+			<< "  " << usage_localsearch << "\n"
+			<< "  " << usage_vnd << "\n"
+			<< "  " << usage_grasp << "\n";
+		return 1;
+	}
+	else if (args.size() == 2)
+		return gui_application(args);
+	
+	auto arg = args.begin() + 1;
+	const std::string opt_algo = *(arg++);
+	auto instance = Instance::load_from_file((arg++)->c_str());
+	auto solution = Solution(&instance);
+
+	Algorithm* algorithm = nullptr;
+	if (opt_algo == "greedy")
+	{
+		// <instance>
+		if (args.size() < 3)
+		{
+			std::cerr << "Usage: " << usage_greedy << "\n";
+			return 1;
+		}
+		algorithm = new GreedyNearestAny(&instance);
+	}
+	else if (opt_algo == "greedy_rand")
+	{
+		// <instance> <candidates> <tightening>
+		if (args.size() < 5)
+		{
+			std::cerr << "Usage: " << usage_greedy_rand << "\n";
+			return 1;
+		}
+		auto* greedy_alg = new GreedyRandomizedClosest(&instance);
+		greedy_alg->candidates_count = std::stoi(*(arg++));
+		greedy_alg->tightening_interval = std::stoi(*(arg++));
+		algorithm = greedy_alg;
+	}
+	else if (opt_algo == "random")
+	{
+		// <instance>
+		if (args.size() < 3)
+		{
+			std::cerr << "Usage: " << usage_random << "\n";
+			return 1;
+		}
+		algorithm = new RandomConstruction(&instance);
+	}
+	else if (opt_algo == "beam")
+	{
+		// <instance> <beam_width>
+		if (args.size() < 4)
+		{
+			std::cerr << "Usage: " << usage_beam << "\n";
+			return 1;
+		}
+		auto* beam_search = new BeamSearch(&instance);
+		beam_search->beam_width = std::stoi(*(arg++));
+		algorithm = beam_search;
+	}
+	else if (opt_algo == "localsearch")
+	{
+		// <instance> <initial_solution> <neighborhood_type> <strategy ("first"|"best")>
+		if (args.size() < 6)
+		{
+			std::cerr << "Usage: " << usage_localsearch << "\n";
+			return 1;
+		}
+		auto* localsearch = new LocalSearch(&instance);
+		localsearch->set_initial_solution(Solution::load_from_file((arg++)->c_str(), &instance));
+		localsearch->improvement_strategy = *(arg++) == "first"
+			? LocalSearch::FIRST_IMPROVEMENT : LocalSearch::BEST_IMPROVEMENT;
+		localsearch->neighborhood_type = static_cast<LocalSearch::NeighborhoodType>(std::stoi(*(arg++)));
+		algorithm = localsearch;
+	}
+	else if (opt_algo == "vnd")
+	{
+		// <instance> <initial_solution>
+		if (args.size() < 4)
+		{
+			std::cerr << "Usage: " << usage_vnd << "\n";
+			return 1;
+		}
+		auto* vnd = new VariableNeighborhoodDescent(&instance);
+		vnd->set_initial_solution(Solution::load_from_file((arg++)->c_str(), &instance));
+		algorithm = vnd;
+	}
+	else if (opt_algo == "grasp")
+	{
+		// <instance> <candidates> <tightening> <neighborhood_type> <strategy ("first"|"best")> <stagnation_limit>
+		if (args.size() < 8)
+		{
+			std::cerr << "Usage: " << usage_grasp << "\n";
+			return 1;
+		}
+		auto construction = std::make_unique<GreedyRandomizedClosest>(&instance);
+		construction->candidates_count = std::stoi(*(arg++));
+		construction->tightening_interval = std::stoi(*(arg++));
+		auto localsearch = std::make_unique<LocalSearch>(&instance);
+		localsearch->neighborhood_type = static_cast<LocalSearch::NeighborhoodType>(std::stoi(*(arg++)));
+		localsearch->improvement_strategy = *(arg++) == "first"
+			? LocalSearch::FIRST_IMPROVEMENT : LocalSearch::BEST_IMPROVEMENT;
+		auto* grasp = new Grasp(&instance, std::move(construction), std::move(localsearch));
+		grasp->stopping_criterion.type = StoppingCriterion::STAGNATION;
+		grasp->stopping_criterion.stagnation_limit = std::stoi(*(arg++));
+		algorithm = grasp;
+	}
+	else
+	{
+		std::cerr << "Unknown or incomplete command.\n";
+		return 1;
+	}
+
+	solution = Algorithm::run(*algorithm);
+	solution.print();
+
+	if (arg != args.end())
+	{
+		solution.write_to_file((*arg).c_str());
+		std::cout << "Solution written to " << (*arg) << "\n";
+	}
+
+	delete algorithm;
 	return 0;
 }

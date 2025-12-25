@@ -34,10 +34,10 @@ protected:
 	float current_cost_;
 	bool done_;
 
-	ImprovementStrategy improvement_strategy_;
-	NeighborhoodType neighborhood_type_;
-
 public:
+	ImprovementStrategy improvement_strategy;
+	NeighborhoodType neighborhood_type;
+
 	struct Metrics : public SolutionMetrics
 	{
 		int neighborhood_type;
