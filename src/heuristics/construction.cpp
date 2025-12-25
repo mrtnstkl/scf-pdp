@@ -223,7 +223,9 @@ size_t GreedyNearestAny::step()
 
 size_t GreedyRandomizedClosest::step()
 {
-		GreedyConstruction::State& s = state;
+	static thread_local std::mt19937 rng(std::random_device{}());
+
+	GreedyConstruction::State& s = state;
 	if (s.done)
 		return s.step;
 
@@ -297,7 +299,7 @@ size_t GreedyRandomizedClosest::step()
 	}
 	// randomly select one of the candidates
 	Node* closest_node = nullptr;
-	size_t index = std::rand() % closest.size();
+	size_t index = rng() % closest.size();
 	auto it = closest.begin();;
 	std::advance(it, index);
 	closest_node = it->second;
