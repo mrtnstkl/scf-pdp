@@ -1,6 +1,7 @@
 #include "construction.h"
 
 #include <algorithm>
+#include <filesystem>
 #include <iostream>
 #include <map>
 #include <ostream>
@@ -448,3 +449,263 @@ void GreedyNearestWeighted::draw()
 #endif // SCFPDP_HEADLESS
 }
 
+bool GreedyInsertion::State::NodeOrder::operator()(const CustomerRequest* a, const CustomerRequest* b) const
+{
+	// order by decreasing capacity change
+	// this causes larger requests to be served first
+	if (a->pickup_node->capacity_change == b->pickup_node->capacity_change)
+		return a->id < b->id;
+	return a->pickup_node->capacity_change > b->pickup_node->capacity_change;
+}
+
+void GreedyInsertion::Metrics::draw()
+{
+#ifndef SCFPDP_HEADLESS
+	SolutionMetrics::draw();
+	ImGui::Text("Served Requests: %zu", served_requests);
+#endif // SCFPDP_HEADLESS
+}
+
+void GreedyInsertion::Metrics::print_head(std::ostream& os) const
+{
+	SolutionMetrics::print_head(os);
+	os << ",served_requests";
+}
+
+void GreedyInsertion::Metrics::print(std::ostream& os) const
+{
+	SolutionMetrics::print(os);
+	os << "," << served_requests;
+}
+
+GreedyInsertion::GreedyInsertion(Instance* instance)
+	: instance(instance), initial_solution(instance, true), state(initial_solution)
+{
+	reset();
+}
+
+GreedyInsertion::GreedyInsertion(Instance* instance, const Solution& initial_solution)
+	: instance(instance), initial_solution(initial_solution), state(this->initial_solution)
+{
+	reset();
+}
+
+Solution GreedyInsertion::get_current_solution()
+{
+	Solution sol(instance, true);
+	for (size_t i = 0; i < state.routes.size(); ++i)
+	{
+		Route& route = sol.routes.at(i);
+		for (const auto& [node, load] : state.routes[i])
+			route.nodes.push_back(node);
+		route.total_distance = instance->calculate_route_time(route);
+	}
+	metrics.step = state.step;
+	metrics.served_requests = state.served_requests;
+	sol.calculate_metrics(metrics);
+	// todo: delta seems broken
+	//metrics.total_cost = state.delta.cost();
+	//metrics.fairness = state.delta.fairness();
+	return sol;
+}
+
+size_t GreedyInsertion::step()
+{
+	State& s = state;
+	if (s.done)
+		return s.step;
+
+	if (s.served_requests == 0)
+	{
+		// initialize routes with a single request each
+		for (size_t i = 0; i < s.routes.size(); ++i)
+		{
+			auto& route = s.routes[i];
+			// insert pickup and dropoff
+			auto request_to_insert = s.unserved_requests.begin();
+			Node* cr_pickup = request_to_insert->first->pickup_node;
+			Node* cr_dropoff = request_to_insert->first->dropoff_node;
+			const int request_load = cr_pickup->capacity_change;
+			route.emplace_back(std::pair<Node*, int>(cr_pickup, request_load));
+			route.emplace_back(std::pair<Node*, int>(cr_dropoff, 0));
+			s.unserved_requests.erase(request_to_insert);
+			// update delta calculator
+			s.delta.add_stop(i, nullptr, cr_pickup);
+			s.delta.add_stop(i, cr_pickup, cr_dropoff);
+			++s.served_requests;
+			// update distance maps of remaining unserved requests
+			for (auto& [unserved_request, distance_map] : s.unserved_requests)
+			{
+				// for each remaining unserved request, add distances to the newly inserted nodes
+				const dist_t dist_pickup = instance->get_distance(unserved_request->pickup_node, cr_pickup);
+				const dist_t dist_dropoff =	instance->get_distance(unserved_request->pickup_node, cr_dropoff);
+				distance_map.insert({dist_pickup, {s.routes.begin() + i, route.begin()}});
+				distance_map.insert({dist_dropoff, {s.routes.begin() + i, std::next(route.begin())}});
+			}
+		}
+		return ++s.step;
+	}
+
+	// we want to insert the front request of the unserved requests map
+	auto request_to_insert = s.unserved_requests.begin();
+	Node* cr_pickup = request_to_insert->first->pickup_node;
+	Node* cr_dropoff = request_to_insert->first->dropoff_node;
+	const int request_load = cr_pickup->capacity_change;
+
+	//assert(request_to_insert->second.size() == s.served_requests * 2);
+
+	// we want to insert the pickup after the closest feasible node
+	for (auto& [dist, insertion_point] : request_to_insert->second)
+	{
+		const auto route_idx = std::distance(s.routes.begin(), insertion_point.route_it);
+		auto& route = *insertion_point.route_it;
+		// check if insertion would violate capacity
+		const auto p_new_load = insertion_point.node_it->second + request_load;
+		if (p_new_load > instance->vehicle_capacity)
+			continue;
+		// insert the pickup
+		const auto p_inserted_it = route.insert(std::next(insertion_point.node_it), {cr_pickup, p_new_load});
+		// update delta calculator
+		const auto p_next_it = std::next(p_inserted_it);
+		s.delta.add_stop(route_idx,
+			insertion_point.node_it->first,
+			cr_pickup,
+			p_next_it != route.end() ? p_next_it->first : nullptr);
+
+		// find insertion point for dropoff
+		// for this, we scan the route from the pickup insertion point onwards, stopping at the first infeasible position
+		// we then choose the best recorded position for insertion
+		float best_cost = std::numeric_limits<float>::max();
+		auto best_dropoff_it = route.end();
+
+		for (auto dropoff_it = std::next(p_inserted_it); dropoff_it != route.end(); ++dropoff_it)
+		{
+			// check if insertion would violate capacity
+			if (dropoff_it->second + request_load > instance->vehicle_capacity)
+				break; // at this node, capacity would already be violated, so stop searching
+			// simulate insertion and calculate cost
+			DeltaCalculator temp_delta = s.delta;
+			const auto next_it = std::next(dropoff_it);
+			temp_delta.add_stop(route_idx, dropoff_it->first, cr_dropoff,
+				next_it != route.end() ? next_it->first : nullptr);
+			const float cost = temp_delta.cost();
+			if (cost < best_cost)
+			{
+				best_cost = cost;
+				best_dropoff_it = dropoff_it;
+			}
+		}
+
+		if (best_dropoff_it == route.end())
+		{
+			// only possible insertion is right after pickup
+			const auto d_inserted_it = route.insert(std::next(p_inserted_it), {cr_dropoff, p_new_load - request_load});
+			// update delta calculator
+			const auto d_next_it = std::next(d_inserted_it);
+			s.delta.add_stop(route_idx, p_inserted_it->first, cr_dropoff,
+				d_next_it != route.end() ? d_next_it->first : nullptr);
+		}
+		else
+		{
+			// insert at best found position
+			const auto d_inserted_it = route.insert(std::next(best_dropoff_it), {cr_dropoff, best_dropoff_it->second});
+			// update delta calculator
+			const auto d_next_it = std::next(d_inserted_it);
+			s.delta.add_stop(route_idx, best_dropoff_it->first, cr_dropoff,
+				d_next_it != route.end() ? d_next_it->first : nullptr);
+			// update loads between pickup and dropoff
+			for (auto inbetween_it = std::next(p_inserted_it); inbetween_it != d_inserted_it; ++inbetween_it)
+				inbetween_it->second += request_load;
+		}
+		// remove request from unserved requests
+		s.unserved_requests.erase(request_to_insert);
+		// update distance maps of remaining unserved requests
+		for (auto& [unserved_request, distance_map] : s.unserved_requests)
+		{
+			// for each remaining unserved request, add distances to the newly inserted nodes
+			const dist_t dist_pickup = instance->get_distance(unserved_request->pickup_node, cr_pickup);
+			const dist_t dist_dropoff =	instance->get_distance(unserved_request->pickup_node, cr_dropoff);
+			distance_map.insert({dist_pickup, {s.routes.begin() + route_idx, p_inserted_it}});
+			distance_map.insert({dist_dropoff, {s.routes.begin() + route_idx, best_dropoff_it != route.end() ? best_dropoff_it : p_inserted_it}});
+		}
+		++s.served_requests;
+		++s.step;
+		break;
+	}
+	if (s.served_requests >= instance->min_requests || s.unserved_requests.empty())
+	{
+		s.done = true;
+	}
+	return s.step;
+}
+
+bool GreedyInsertion::done() { return state.done; }
+
+void GreedyInsertion::reset()
+{
+	state.step = 0;
+	state.done = false;
+	state.served_requests = 0;
+	state.routes.clear();
+	state.unserved_requests.clear();
+	state.delta = DeltaCalculator(initial_solution);
+
+	assert(initial_solution.validate(true));
+
+	for (CustomerRequest& request : instance->requests)
+		// initialize all requests as unserved
+		// the map of closest nodes is empty for now
+		state.unserved_requests.insert({&request, {}});
+
+	// populate routes and erase served requests from unserved map
+	for (const auto& route : initial_solution.routes)
+	{
+		State::Route new_route;
+		int load = 0;
+		for (Node* node : route.nodes)
+		{
+			load += node->capacity_change;
+			state.delta.add_stop(state.routes.size(), new_route.empty() ? nullptr : new_route.back().first, node);
+			new_route.emplace_back(node, load);
+			if (node->is_pickup())
+				state.unserved_requests.erase(&instance->get_request_from_node(node));
+			else
+				state.served_requests++;
+		}
+		state.routes.push_back(std::move(new_route));
+	}
+
+	// compute distances of the pickups of unserved requests to all visited nodes
+	for (auto& [request, distance_map] : state.unserved_requests)
+	{
+		for (auto route_it = state.routes.begin(); route_it != state.routes.end(); ++route_it)
+		{
+			for (auto node_it = route_it->begin(); node_it != route_it->end(); ++node_it)
+			{
+				const dist_t dist = instance->get_distance(request->pickup_node, node_it->first);
+				distance_map.insert({dist, State::NearbyNode{route_it, node_it}});
+			}
+		}
+	}
+
+	if (state.unserved_requests.empty())
+		state.done = true;
+
+	std::cout << "GreedyInsertion initialized with "
+		<< state.routes.size() << " routes, "
+		<< state.served_requests << " served requests, "
+		<< state.unserved_requests.size() << " unserved requests.\n";
+}
+
+void GreedyInsertion::draw()
+{
+#ifndef SCFPDP_HEADLESS
+	if (ImGui::Button("Load Solution from File"))
+	{
+		if (std::filesystem::exists("solutions/current_solution.sln"))
+		{
+			initial_solution = Solution::load_from_file("solutions/current_solution.sln", instance);
+		}
+	}
+#endif // SCFPDP_HEADLESS
+}

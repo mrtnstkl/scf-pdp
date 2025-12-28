@@ -86,7 +86,7 @@ void Solution::calculate_metrics(SolutionMetrics& metrics) const
 	metrics.valid = validate();
 }
 
-bool Solution::validate() const
+bool Solution::validate(bool only_structure) const
 {
 	if (routes.size() != instance->vehicle_count)
 		return false; // unexpected route count
@@ -123,7 +123,7 @@ bool Solution::validate() const
 		if (!open_requests.empty())
 			return false; // not all pickups were dropped off
 	}
-	if (visited_nodes.size() / 2 < instance->min_requests)
+	if (!only_structure && visited_nodes.size() / 2 < instance->min_requests)
 		return false; // less customer requests have been fullfilled than required
 	return true;
 }
@@ -245,6 +245,19 @@ DeltaCalculator::DeltaCalculator(Instance* instance)
 
 DeltaCalculator::DeltaCalculator(Instance* instance, const Solution& solution)
 	: DeltaCalculator(instance)
+{
+	route_sum = 0;
+	for (size_t i = 0; i < solution.routes.size(); ++i)
+	{
+		const Route& route = solution.routes[i];
+		const auto d = instance->calculate_route_time(route);
+		route_sum += d;
+		route_squares[i] = d * d;
+	}
+}
+
+DeltaCalculator::DeltaCalculator(const Solution& solution)
+	: DeltaCalculator(solution.instance)
 {
 	route_sum = 0;
 	for (size_t i = 0; i < solution.routes.size(); ++i)

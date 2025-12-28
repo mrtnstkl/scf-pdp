@@ -81,12 +81,20 @@ public:
 	CustomerRequest& get_request_from_node(const Node* node);
 
 	/**
-	 * @brief Get the index of a node in the instance's node list
+	 * @brief Get the index of a node in the instance's node list (the `nodes` span)
 	 * 
 	 * @param node A node that belongs to this instance
-	 * @return uint64_t The index of the node
+	 * @return uint64_t The index of the node in `nodes`
 	 */
 	uint64_t get_index(const Node* node) const;
+
+	/**
+	 * @brief Get the index of a customer request in the instance's request list (the `requests` span)
+	 * 
+	 * @param request A customer request that belongs to this instance
+	 * @return uint64_t The index of the request in `requests`
+	 */
+	uint64_t get_index(const CustomerRequest* request) const;
 
 	/** 
 	 * @brief Calculate the total time (distance) of a given route using the distance matrix

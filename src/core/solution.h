@@ -47,10 +47,12 @@ struct Solution
 	/** 
 	 * @brief Validate the solution against instance constraints
 	 * 
+	 * @param only_structure If true, ignores minimum requests requirement
+	 * 
 	 * @return true if the solution is valid
 	 * @return false if the solution is invalid
 	 */
-	bool validate() const;
+	bool validate(bool only_structure = false) const;
 
 	void print() const;
 
@@ -88,7 +90,9 @@ struct DeltaCalculator
 	std::vector<uint64_t> route_squares;
 
 	DeltaCalculator(Instance* instance);
-	DeltaCalculator(Instance* instance, const Solution& solution);
+	[[deprecated]] DeltaCalculator(Instance* instance, const Solution& solution);
+	DeltaCalculator(const Solution& solution);
+
 	/**
 	 * @brief Add a stop to the end of the route
 	 * 

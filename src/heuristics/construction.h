@@ -83,3 +83,53 @@ struct GreedyNearestWeighted : public GreedyConstruction
 	size_t step() override;
 	void draw() override;
 };
+
+struct GreedyInsertion : public Algorithm
+{
+	struct State
+	{
+		size_t step;
+		bool done;
+		size_t served_requests;
+		// a route is a list of pairs of (node, load after visiting node)
+		using Route = std::list<std::pair<Node*, int>>;
+		std::vector<Route> routes;
+		struct NearbyNode
+		{
+			std::vector<Route>::iterator route_it;
+			Route::iterator node_it;
+		};
+		struct NodeOrder
+		{
+			bool operator()(const CustomerRequest* a, const CustomerRequest* b) const;
+		};
+		std::map<CustomerRequest*, std::map<dist_t, NearbyNode>, NodeOrder> unserved_requests;
+		DeltaCalculator delta;
+		State(Solution& initial_solution)
+			: delta(initial_solution) {}
+	};
+
+	struct Metrics : public SolutionMetrics
+	{
+		size_t served_requests;
+		void draw() override;
+		void print_head(std::ostream& os) const override;
+		void print(std::ostream& os) const override;
+	};
+
+	Instance* instance;
+	Solution initial_solution;
+
+	State state;
+	Metrics metrics;
+
+	GreedyInsertion(Instance* instance);
+	GreedyInsertion(Instance* instance, const Solution& initial_solution);
+
+	Solution get_current_solution() override;
+	size_t step() override;
+	bool done() override;
+	virtual void reset();
+	void draw() override;
+
+};

@@ -80,6 +80,13 @@ uint64_t Instance::get_index(const Node* node) const
 	return node - nodes.data();
 }
 
+uint64_t Instance::get_index(const CustomerRequest* request) const
+{
+	assert(request >= requests.data() &&
+	       request < requests.data() + request_count);
+	return request - requests.data();
+}
+
 uint64_t Instance::calculate_route_time(const Route& route) const
 {
 	if (route.nodes.empty())

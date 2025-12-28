@@ -23,6 +23,7 @@ int gui_application(std::vector<std::string> args)
 	auto dcon = GreedyNearestAny(&instance);
 	auto gcon = GreedyRandomizedClosest(&instance);
 	auto wcon = GreedyNearestWeighted(&instance);
+	auto gins = GreedyInsertion(&instance);
 	auto rcon = RandomConstruction(&instance);
 	auto bsearch = BeamSearch(&instance);
 	auto lsearch = LocalSearch(&instance);
@@ -33,6 +34,7 @@ int gui_application(std::vector<std::string> args)
 		AlgorithmGui("Greedy Nearest Any", &dcon),
 		AlgorithmGui("Greedy Nearest Radnomized", &gcon),
 		AlgorithmGui("Greedy Nearest Weighted", &wcon),
+		AlgorithmGui("Greedy Insertion", &gins),
 		AlgorithmGui("Randomized", &rcon),
 		AlgorithmGui("Beam Search", &bsearch),
 		AlgorithmGui("Local Search", &lsearch),
