@@ -691,10 +691,10 @@ void GreedyInsertion::reset()
 	if (state.unserved_requests.empty())
 		state.done = true;
 
-	std::cout << "GreedyInsertion initialized with "
-		<< state.routes.size() << " routes, "
-		<< state.served_requests << " served requests, "
-		<< state.unserved_requests.size() << " unserved requests.\n";
+	//std::cout << "GreedyInsertion initialized with "
+	//	<< state.routes.size() << " routes, "
+	//	<< state.served_requests << " served requests, "
+	//	<< state.unserved_requests.size() << " unserved requests.\n";
 }
 
 void GreedyInsertion::draw()

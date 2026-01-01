@@ -32,6 +32,7 @@ struct Algorithm : public GuiElement
 	void draw() override = 0;
 
 	static Solution run(Algorithm& algorithm);
+	static Solution run(Algorithm&& algorithm);
 };
 
 struct StoppingCriterion : public GuiElement

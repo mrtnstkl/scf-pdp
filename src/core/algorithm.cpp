@@ -19,6 +19,14 @@ Solution Algorithm::run(Algorithm& algorithm)
 	return algorithm.get_current_solution();
 }
 
+Solution Algorithm::run(Algorithm&& algorithm)
+{ 
+	algorithm.reset();
+	while (!algorithm.done())
+		algorithm.step();
+	return algorithm.get_current_solution();
+}
+
 void Algorithm::Worker::start(std::function<void(const std::atomic_bool&)> func)
 {
 	stop();

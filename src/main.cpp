@@ -8,6 +8,7 @@
 #include "heuristics/beamsearch.h"
 #include "heuristics/construction.h"
 #include "heuristics/grasp.h"
+#include "heuristics/lns.h"
 #include "heuristics/localsearch.h"
 #include "heuristics/vnd.h"
 #include "util/canvas.h"
@@ -29,6 +30,7 @@ int gui_application(std::vector<std::string> args)
 	auto lsearch = LocalSearch(&instance);
 	auto vnd = VariableNeighborhoodDescent(&instance);
 	auto grasp = Grasp(&instance, std::make_unique<GreedyRandomizedClosest>(&instance), std::make_unique<LocalSearch>(&instance));
+	auto lns = LargeNeighborhoodSearch(&instance);
 
 	auto algorithms = std::array{
 		AlgorithmGui("Greedy Nearest Any", &dcon),
@@ -40,6 +42,7 @@ int gui_application(std::vector<std::string> args)
 		AlgorithmGui("Local Search", &lsearch),
 		AlgorithmGui("Variable Neighborhood Descent", &vnd),
 		AlgorithmGui("GRASP", &grasp),
+		AlgorithmGui("Large Neighborhood Search", &lns),
 	};
 
 	Gui gui;
@@ -93,6 +96,7 @@ int main(int argc, char* argv[])
 	auto usage_localsearch = args[0] + " localsearch <instance> <initial_solution> <neighborhood_type> <strategy (\"first\"|\"best\")>";
 	auto usage_vnd = args[0] + " vnd <instance> <initial_solution>";
 	auto usage_grasp = args[0] + " grasp <instance> <candidates> <tightening> <neighborhood_type> <strategy (\"first\"|\"best\")> <stagnation_limit>";
+	auto usage_lns = args[0] + " lns <instance> <stagnation_limit>";
 
 	if (args.size() < 2)
 	{
@@ -106,7 +110,8 @@ int main(int argc, char* argv[])
 			<< "  " << usage_beam << "\n"
 			<< "  " << usage_localsearch << "\n"
 			<< "  " << usage_vnd << "\n"
-			<< "  " << usage_grasp << "\n";
+			<< "  " << usage_grasp << "\n"
+			<< "  " << usage_lns << "\n";
 		return 1;
 	}
 	else if (args.size() == 2)
@@ -216,6 +221,19 @@ int main(int argc, char* argv[])
 		grasp->stopping_criterion.type = StoppingCriterion::STAGNATION;
 		grasp->stopping_criterion.stagnation_limit = std::stoi(*(arg++));
 		algorithm = grasp;
+	}
+	else if (opt_algo == "lns")
+	{
+		// <instance> <stagnation_limit>
+		if (args.size() < 4)
+		{
+			std::cerr << "Usage: " << usage_lns << "\n";
+			return 1;
+		}
+		auto* lns = new LargeNeighborhoodSearch(&instance);
+		lns->stopping_criterion.type = StoppingCriterion::STAGNATION;
+		lns->stopping_criterion.stagnation_limit = std::stoi(*(arg++));
+		algorithm = lns;
 	}
 	else
 	{

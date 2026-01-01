@@ -140,6 +140,7 @@ inline void AlgorithmVisualizer<A>::draw()
 			logging = output_file.is_open();
 		}
 		Timer timer;
+		record_snapshot(algorithm_->get_current_solution(), algorithm_->metrics, CANVAS);
 		if (recording_level_ == NONE)
 		{
 			while (!algorithm_->done() && !should_stop)
