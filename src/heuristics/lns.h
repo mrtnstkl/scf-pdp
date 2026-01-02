@@ -31,6 +31,11 @@ namespace Lns
 		void operator()(PartialSolution& ps) override;
 		void draw() override;
 	};
+	struct DestroyMatchRouteTime : public SolutionModifier
+	{
+		void operator()(PartialSolution& ps) override;
+		void draw() override;
+	};
 
 	struct RepairGreedyInsertion : public SolutionModifier
 	{

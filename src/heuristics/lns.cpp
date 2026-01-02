@@ -86,6 +86,49 @@ void Lns::DestroyRandomRequests::draw()
 #endif // SCFPDP_HEADLESS
 }
 
+void Lns::DestroyMatchRouteTime::operator()(PartialSolution& ps)
+{
+	uint64_t shortest_route = std::numeric_limits<uint64_t>::max(); 
+	for (auto& route : ps.sol.routes)
+		shortest_route = std::min(shortest_route, route.total_distance);
+	
+	for (int route_id = 0; route_id < ps.sol.routes.size(); ++route_id)
+	{
+		Route& route = ps.sol.routes[route_id];
+		if (route.total_distance <= shortest_route)
+			continue;
+		while (route.total_distance > shortest_route && !route.nodes.empty())
+		{
+			const auto dropoff_it = std::prev(route.nodes.end());
+			Node* dropoff = *dropoff_it;
+			CustomerRequest* cr = &ps.sol.instance->get_request_from_node(dropoff);
+			Node* pickup = cr->pickup_node;
+			const auto pickup_it = std::prev(std::find(route.nodes.rbegin(), route.nodes.rend(), pickup).base());
+
+			ps.unhandled_requests.push_back(cr);
+			const auto old_route_sum = ps.delta.route_sum;
+
+			// remove dropoff
+			ps.delta.remove_stop(route_id, *std::prev(dropoff_it), dropoff);
+			route.nodes.erase(dropoff_it);
+			// remove pickup
+			ps.delta.remove_stop(route_id,
+				(pickup_it == route.nodes.begin()) ? nullptr : *std::prev(pickup_it), pickup,
+				(std::next(pickup_it) == route.nodes.end()) ? nullptr : *std::next(pickup_it));
+			route.nodes.erase(pickup_it);
+
+			route.total_distance = old_route_sum - ps.delta.route_sum;
+		}
+	}
+}
+
+void Lns::DestroyMatchRouteTime::draw()
+{
+#ifndef SCFPDP_HEADLESS
+	ImGui::Text("Destroy: Shorten Routes");
+#endif // SCFPDP_HEADLESS
+}
+
 void Lns::RepairGreedyInsertion::operator()(PartialSolution& ps)
 {
 	GreedyInsertion rebuilder(ps.sol.instance, ps.sol);
@@ -161,6 +204,7 @@ LargeNeighborhoodSearch::LargeNeighborhoodSearch(Instance* instance)
 	// initialize modifier functions
 	destroy_functions_.emplace_back(std::make_unique<Lns::DestroyRandomRequests>());
 	destroy_functions_.emplace_back(std::make_unique<Lns::DestroyRandomRequests>());
+	destroy_functions_.emplace_back(std::make_unique<Lns::DestroyMatchRouteTime>());
 	repair_functions_.emplace_back(std::make_unique<Lns::RepairGreedyInsertion>());
 	repair_functions_.emplace_back(std::make_unique<Lns::RepairGreedyAppend>());
 
