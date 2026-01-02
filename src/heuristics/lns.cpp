@@ -79,17 +79,17 @@ void Lns::DestroyRandomRequests::operator()(PartialSolution& ps)
 void Lns::DestroyRandomRequests::draw()
 {
 #ifndef SCFPDP_HEADLESS
+	ImGui::PushID(this);
 	ImGui::Text("Destroy: Random Requests");
 	ImGui::SliderFloat("Fraction to Remove", &fraction_to_remove, 0.0f, 1.0f);
+	ImGui::PopID();
 #endif // SCFPDP_HEADLESS
 }
 
 void Lns::RepairGreedyInsertion::operator()(PartialSolution& ps)
 {
 	GreedyInsertion rebuilder(ps.sol.instance, ps.sol);
-	while (!rebuilder.done())
-		rebuilder.step();
-	ps.sol = rebuilder.get_current_solution();
+	ps.sol = Algorithm::run(rebuilder);
 	ps.delta = DeltaCalculator(ps.sol);
 }
 
@@ -100,6 +100,20 @@ void Lns::RepairGreedyInsertion::draw()
 #endif // SCFPDP_HEADLESS
 }
 
+void Lns::RepairGreedyAppend::operator()(PartialSolution& ps)
+{
+	GreedyNearestAny rebuilder(*ps.sol.instance, ps.sol);
+	ps.sol = Algorithm::run(rebuilder);
+	ps.delta = DeltaCalculator(ps.sol);
+}
+
+void Lns::RepairGreedyAppend::draw()
+{
+#ifndef SCFPDP_HEADLESS
+	ImGui::Text("Repair: Greedy Append");
+#endif // SCFPDP_HEADLESS
+}
+
 LargeNeighborhoodSearch::ModifierFunction::ModifierFunction(std::unique_ptr<Lns::SolutionModifier> f)
 	: func(std::move(f))
 {
@@ -107,8 +121,19 @@ LargeNeighborhoodSearch::ModifierFunction::ModifierFunction(std::unique_ptr<Lns:
 
 void LargeNeighborhoodSearch::ModifierFunction::reset()
 {
+	weight = 1.f;
 	applications = 0;
 	sucesses = 0;
+}
+
+void LargeNeighborhoodSearch::ModifierFunction::draw()
+{
+#ifndef SCFPDP_HEADLESS
+	ImGui::PushID(this);
+	func->draw();
+	ImGui::Text("Weight: %.8f (a=%llu, s=%llu)", weight, applications, sucesses);
+	ImGui::PopID();
+#endif // SCFPDP_HEADLESS
 }
 
 LargeNeighborhoodSearch::ModifierFunction& LargeNeighborhoodSearch::roulette_select(std::vector<ModifierFunction>& functions)
@@ -135,7 +160,9 @@ LargeNeighborhoodSearch::LargeNeighborhoodSearch(Instance* instance)
 {
 	// initialize modifier functions
 	destroy_functions_.emplace_back(std::make_unique<Lns::DestroyRandomRequests>());
+	destroy_functions_.emplace_back(std::make_unique<Lns::DestroyRandomRequests>());
 	repair_functions_.emplace_back(std::make_unique<Lns::RepairGreedyInsertion>());
+	repair_functions_.emplace_back(std::make_unique<Lns::RepairGreedyAppend>());
 
 	reset();
 }
@@ -186,6 +213,7 @@ void LargeNeighborhoodSearch::reset()
 	case FILE:
 		if (std::filesystem::exists("solutions/current_solution.sln"))
 			initial_soln = Solution::load_from_file("solutions/current_solution.sln", instance_);
+		break;
 	case GREEDY_NEAREST_ANY:
 		initial_soln = Algorithm::run(GreedyNearestAny(instance_));
 		break;
@@ -227,10 +255,10 @@ void LargeNeighborhoodSearch::draw()
 
 	ImGui::SeparatorText("Destroy Functions");
 	for (auto& mf : destroy_functions_)
-		mf.func->draw();
+		mf.draw();
 	ImGui::SeparatorText("Repair Functions");
 	for (auto& mf : repair_functions_)
-		mf.func->draw();
+		mf.draw();
 	ImGui::SeparatorText("Stopping Criterion");
 	stopping_criterion.draw();
 #endif // SCFPDP_HEADLESS

@@ -37,7 +37,12 @@ namespace Lns
 		void operator()(PartialSolution& ps) override;
 		void draw() override;
 	};
-};
+	struct RepairGreedyAppend : public SolutionModifier
+	{
+		void operator()(PartialSolution& ps) override;
+		void draw() override;
+	};
+}
 
 class LargeNeighborhoodSearch : public Algorithm
 {
@@ -49,7 +54,7 @@ public:
 	};
 
 private:
-	struct ModifierFunction
+	struct ModifierFunction : public GuiElement
 	{
 		std::unique_ptr<Lns::SolutionModifier> func;
 		float weight = 1.f;
@@ -57,6 +62,7 @@ private:
 		uint64_t sucesses = 0;
 		void reset();
 		ModifierFunction(std::unique_ptr<Lns::SolutionModifier> f);
+		void draw() override;
 	};
 
 	Instance* instance_;

@@ -180,7 +180,10 @@ inline void AlgorithmVisualizer<A>::draw()
 			algorithm_->worker.stop_requested = true;
 		if (algorithm_->worker.stop_requested)
 			ImGui::Text("Stop requested, please wait.");
-		return;
+		static bool render_while_running = false;
+		ImGui::Checkbox("Render While Running (experimental)", &render_while_running);
+		if (!render_while_running)
+			return;
 	}
 
 	// Reset and Free Buttons
