@@ -21,6 +21,8 @@ struct GreedyConstruction : public Algorithm
 		std::multimap<dist_t, GreedyConstruction::Driver> busy_drivers;
 		std::vector<GreedyConstruction::Driver> finished_drivers;
 		std::unordered_set<Node*> unvisited_pickups;
+		State() = default;
+		State(Solution& initial_solution);
 	};
 	struct Metrics : public SolutionMetrics
 	{
@@ -33,6 +35,7 @@ struct GreedyConstruction : public Algorithm
 
 	Instance* instance;
 	State state;
+	Solution initial_solution;
 	Metrics metrics;
 
 	GreedyConstruction(Instance* instance);
@@ -55,8 +58,8 @@ struct RandomConstruction : public GreedyConstruction
 
 struct GreedyNearestAny : public GreedyConstruction
 {
-	GreedyNearestAny(Instance* instance)
-		: GreedyConstruction(instance) {}
+	GreedyNearestAny(Instance* instance);
+	GreedyNearestAny(Instance& instance, const Solution& initial_solution);
 
 	size_t step() override;
 };

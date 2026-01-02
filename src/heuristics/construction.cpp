@@ -16,6 +16,30 @@
 #include "imgui.h"
 #endif // SCFPDP_HEADLESS
 
+
+GreedyConstruction::State::State(Solution& initial_solution)
+	: step(0), done(false), accepted_requests(0), served_requests(0)
+{
+	for (Node& node : initial_solution.instance->pickups)
+		unvisited_pickups.insert(&node);
+	for (int route_id = 0; const Route& route : initial_solution.routes)
+	{
+		if (route.nodes.empty())
+		{
+			busy_drivers.insert({0, Driver(route_id++)});
+			continue;
+		}
+		Driver driver{route_id++};
+		for (Node* node : route.nodes)
+		{
+			driver.visit(node, *initial_solution.instance);
+			if (node->is_pickup())
+				unvisited_pickups.erase(node);
+		}
+		busy_drivers.insert({driver.time, std::move(driver)});
+	}
+}
+
 void GreedyConstruction::Metrics::draw()
 {
 #ifndef SCFPDP_HEADLESS
@@ -41,19 +65,11 @@ void GreedyConstruction::Metrics::print(std::ostream& os) const
 
 void GreedyConstruction::reset()
 {
-	Solution empty_solution(instance);
-	state.step = 0;
-	state.done = false;
-	state.accepted_requests = 0;
-	state.served_requests = 0;
-	state.busy_drivers.clear();
-	state.finished_drivers.clear();
-	state.unvisited_pickups.clear();
+	state = State(initial_solution);
 }
 
-
 GreedyConstruction::GreedyConstruction(Instance* instance)
-	: instance(instance)
+	: instance(instance), initial_solution(instance, true)
 {
 	reset();
 }
@@ -94,13 +110,6 @@ size_t RandomConstruction::step()
 	State& s = state;
 	if (s.done)
 		return s.step;
-	if (s.step == 0)
-	{
-		for (Node& pickup : instance->pickups)
-			s.unvisited_pickups.insert(&pickup);
-		for (size_t i = 0; i < instance->vehicle_count; ++i)
-			s.busy_drivers.insert({0, Driver(i)});
-	}
 
 	// select the driver that is furthest behind
 	Driver driver = std::move(s.busy_drivers.begin()->second);
@@ -145,36 +154,44 @@ size_t RandomConstruction::step()
 	return ++s.step;
 }
 
+GreedyNearestAny::GreedyNearestAny(Instance* instance)
+	: GreedyConstruction(instance)
+{
+	reset();
+}
+
+GreedyNearestAny::GreedyNearestAny(Instance& instance, const Solution& initial_solution)
+	: GreedyConstruction(&instance)
+{
+	this->initial_solution = initial_solution;
+	reset();
+}
 
 size_t GreedyNearestAny::step()
 {
 	GreedyConstruction::State& s = state;
-	if (s.done)
-		return s.step;
-
-	if (s.step == 0)
-	{
-		for (Node& pickup : instance->pickups)
-			s.unvisited_pickups.insert(&pickup);
-		// find the closest pickup locations to the depot
-		std::vector<Node*> pickups_near_depot = {s.unvisited_pickups.begin(), s.unvisited_pickups.end()};
-		std::ranges::stable_sort(pickups_near_depot, [&](Node* a, Node* b)
-			{ return instance->get_distance(a) < instance->get_distance(b); }
-		);
-		for (size_t i = 0; i < std::min<size_t>(instance->vehicle_count, pickups_near_depot.size()); ++i)
-		{
-			Node* pickup = pickups_near_depot[i]; // next closest pickup
-			s.unvisited_pickups.erase(pickup); // remove from unvisited nodes
-			Driver driver{i};
-			driver.visit(pickup, *instance);
-			s.busy_drivers.insert({driver.time, driver});
-			s.accepted_requests++;
-		}
-	}
-	else if (s.busy_drivers.empty())
+	if (s.done || s.busy_drivers.empty())
 	{
 		s.done = true;
 		return s.step;
+	}
+	if (auto it = s.busy_drivers.begin(); it->first == 0)
+	{
+		// find the closest pickup location to the depot
+		std::pair<dist_t, Node*> closest = {UINT16_MAX, nullptr};
+		for (Node* pickup : s.unvisited_pickups)
+		{
+			const auto dist = instance->get_distance(pickup);
+			if (dist < closest.first)
+				closest = {dist, pickup};
+		}
+		Node* closest_node = closest.second;
+		s.unvisited_pickups.erase(closest_node);
+		it->second.visit(closest_node, *instance);
+		s.busy_drivers.insert({it->second.time, std::move(it->second)});
+		s.busy_drivers.erase(it);
+		s.accepted_requests++;
+		return ++s.step;
 	}
 
 	// select the driver that is furthest behind
@@ -231,32 +248,28 @@ size_t GreedyRandomizedClosest::step()
 	static thread_local std::mt19937 rng(std::random_device{}());
 
 	GreedyConstruction::State& s = state;
-	if (s.done)
-		return s.step;
-
-	if (s.step == 0)
-	{
-		for (Node& pickup : instance->pickups)
-			s.unvisited_pickups.insert(&pickup);
-		// find the closest pickup locations to the depot
-		std::vector<Node*> pickups_near_depot = {s.unvisited_pickups.begin(), s.unvisited_pickups.end()};
-		std::ranges::stable_sort(pickups_near_depot, [&](Node* a, Node* b)
-			{ return instance->get_distance(a) < instance->get_distance(b); }
-		);
-		for (size_t i = 0; i < std::min<size_t>(instance->vehicle_count, pickups_near_depot.size()); ++i)
-		{
-			Node* pickup = pickups_near_depot[i]; // next closest pickup
-			s.unvisited_pickups.erase(pickup); // remove from unvisited nodes
-			Driver driver{i};
-			driver.visit(pickup, *instance);
-			s.busy_drivers.insert({driver.time, driver});
-			s.accepted_requests++;
-		}
-	}
-	else if (s.busy_drivers.empty())
+	if (s.done || s.busy_drivers.empty())
 	{
 		s.done = true;
 		return s.step;
+	}
+	if (auto it = s.busy_drivers.begin(); it->first == 0)
+	{
+		// find the closest pickup location to the depot
+		std::pair<dist_t, Node*> closest = {UINT16_MAX, nullptr};
+		for (Node* pickup : s.unvisited_pickups)
+		{
+			const auto dist = instance->get_distance(pickup);
+			if (dist < closest.first)
+				closest = {dist, pickup};
+		}
+		Node* closest_node = closest.second;
+		s.unvisited_pickups.erase(closest_node);
+		it->second.visit(closest_node, *instance);
+		s.busy_drivers.insert({it->second.time, std::move(it->second)});
+		s.busy_drivers.erase(it);
+		s.accepted_requests++;
+		return ++s.step;
 	}
 
 	// select the driver that is furthest behind
@@ -305,7 +318,7 @@ size_t GreedyRandomizedClosest::step()
 	// randomly select one of the candidates
 	Node* closest_node = nullptr;
 	size_t index = rng() % closest.size();
-	auto it = closest.begin();;
+	auto it = closest.begin();
 	std::advance(it, index);
 	closest_node = it->second;
 
@@ -350,31 +363,28 @@ GreedyNearestWeighted::GreedyNearestWeighted(Instance* instance)
 size_t GreedyNearestWeighted::step()
 {
 	GreedyConstruction::State& s = state;
-	if (s.done)
-		return s.step;
-
-	if (s.step == 0)
-	{
-		for (Node& pickup : instance->pickups)
-			s.unvisited_pickups.insert(&pickup);
-		// find the closest pickup locations to the depot
-		std::vector<Node*> pickups_near_depot = {s.unvisited_pickups.begin(), s.unvisited_pickups.end()};
-		std::ranges::stable_sort(pickups_near_depot, [&](Node* a, Node* b)
-			{ return instance->get_distance(a) < instance->get_distance(b); }
-		);
-		for (size_t i = 0; i < std::min<size_t>(instance->vehicle_count, pickups_near_depot.size()); ++i)
-		{
-			Node* pickup = pickups_near_depot[i]; // next closest pickup
-			s.unvisited_pickups.erase(pickup); // remove from unvisited nodes
-			Driver driver{i};
-			driver.visit(pickup, *instance);
-			s.busy_drivers.insert({driver.time, driver});
-		}
-	}
-	else if (s.busy_drivers.empty())
+	if (s.done || s.busy_drivers.empty())
 	{
 		s.done = true;
 		return s.step;
+	}
+	if (auto it = s.busy_drivers.begin(); it->first == 0)
+	{
+		// find the closest pickup location to the depot
+		std::pair<dist_t, Node*> closest = {UINT16_MAX, nullptr};
+		for (Node* pickup : s.unvisited_pickups)
+		{
+			const auto dist = instance->get_distance(pickup);
+			if (dist < closest.first)
+				closest = {dist, pickup};
+		}
+		Node* closest_node = closest.second;
+		s.unvisited_pickups.erase(closest_node);
+		it->second.visit(closest_node, *instance);
+		s.busy_drivers.insert({it->second.time, std::move(it->second)});
+		s.busy_drivers.erase(it);
+		s.accepted_requests++;
+		return ++s.step;
 	}
 
 	// select the driver that is furthest behind
@@ -426,8 +436,8 @@ size_t GreedyNearestWeighted::step()
 	}
 
 	// add the node to the driver's path
-	std::cout << "Driver " << driver.id << " visits "
-		<< (selected_node->is_pickup() ? "pickup" : "dropoff") << " -> load: " << driver.load << "\n";
+	//std::cout << "Driver " << driver.id << " visits "
+	//	<< (selected_node->is_pickup() ? "pickup" : "dropoff") << " -> load: " << driver.load << "\n";
 	driver.visit(selected_node, *instance);
 	s.busy_drivers.insert({driver.time, std::move(driver)});
 
@@ -521,6 +531,9 @@ size_t GreedyInsertion::step()
 		for (size_t i = 0; i < s.routes.size(); ++i)
 		{
 			auto& route = s.routes[i];
+			if (route.size() > 0)
+				continue;
+
 			// insert pickup and dropoff
 			auto request_to_insert = s.unserved_requests.begin();
 			Node* cr_pickup = request_to_insert->first->pickup_node;
