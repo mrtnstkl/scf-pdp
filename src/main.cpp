@@ -1,5 +1,7 @@
 #include <array>
+#include <filesystem>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -126,7 +128,8 @@ int main(int argc, char* argv[])
 	
 	auto arg = args.begin() + 1;
 	const std::string opt_algo = *(arg++);
-	auto instance = Instance::load_from_file((arg++)->c_str());
+	const std::string opt_instance = *(arg++);
+	auto instance = Instance::load_from_file(opt_instance.c_str());
 	auto solution = Solution(&instance);
 
 	Algorithm* algorithm = nullptr;
@@ -247,7 +250,7 @@ int main(int argc, char* argv[])
 	if (arg != args.end())
 	{
 		std::stringstream comment;
-		comment << "solution" << ";" << solution.calculate_cost();
+		comment << std::filesystem::path(opt_instance).stem().string() << ";" << solution.calculate_cost();
 		solution.write_to_file((*arg).c_str(), comment.str().c_str());
 		std::cout << "Solution written to " << (*arg) << "\n";
 	}
