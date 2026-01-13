@@ -98,7 +98,7 @@ int main(int argc, char* argv[])
 	auto usage_localsearch = args[0] + " localsearch <instance> <initial_solution> <neighborhood_type> <strategy (\"first\"|\"best\")>";
 	auto usage_vnd = args[0] + " vnd <instance> <initial_solution>";
 	auto usage_grasp = args[0] + " grasp <instance> <candidates> <tightening> <neighborhood_type> <strategy (\"first\"|\"best\")> <stagnation_limit>";
-	auto usage_lns = args[0] + " lns <instance> <stagnation_limit>";
+	auto usage_lns = args[0] + " lns <instance> <stagnation_limit> <reaction_factor>";
 
 	if (args.size() < 2)
 	{
@@ -227,8 +227,8 @@ int main(int argc, char* argv[])
 	}
 	else if (opt_algo == "lns")
 	{
-		// <instance> <stagnation_limit>
-		if (args.size() < 4)
+		// <instance> <stagnation_limit> <reaction_factor>
+		if (args.size() < 5)
 		{
 			std::cerr << "Usage: " << usage_lns << "\n";
 			return 1;
@@ -236,6 +236,7 @@ int main(int argc, char* argv[])
 		auto* lns = new LargeNeighborhoodSearch(&instance);
 		lns->stopping_criterion.type = StoppingCriterion::STAGNATION;
 		lns->stopping_criterion.stagnation_limit = std::stoi(*(arg++));
+		lns->reaction_factor = std::stof(*(arg++));
 		algorithm = lns;
 	}
 	else
