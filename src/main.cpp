@@ -9,6 +9,7 @@
 #include "core/solution.h"
 #include "heuristics/beamsearch.h"
 #include "heuristics/construction.h"
+#include "heuristics/geneticalgorithm.h"
 #include "heuristics/grasp.h"
 #include "heuristics/lns.h"
 #include "heuristics/localsearch.h"
@@ -33,10 +34,11 @@ int gui_application(std::vector<std::string> args)
 	auto vnd = VariableNeighborhoodDescent(&instance);
 	auto grasp = Grasp(&instance, std::make_unique<GreedyRandomizedClosest>(&instance), std::make_unique<LocalSearch>(&instance));
 	auto lns = LargeNeighborhoodSearch(&instance);
+	auto genetic = GeneticAlgorithm(&instance);
 
 	auto algorithms = std::array{
 		AlgorithmGui("Greedy Nearest Any", &dcon),
-		AlgorithmGui("Greedy Nearest Radnomized", &gcon),
+		AlgorithmGui("Greedy Nearest Randomized", &gcon),
 		AlgorithmGui("Greedy Nearest Weighted", &wcon),
 		AlgorithmGui("Greedy Insertion", &gins),
 		AlgorithmGui("Randomized", &rcon),
@@ -45,6 +47,7 @@ int gui_application(std::vector<std::string> args)
 		AlgorithmGui("Variable Neighborhood Descent", &vnd),
 		AlgorithmGui("GRASP", &grasp),
 		AlgorithmGui("Large Neighborhood Search", &lns),
+		AlgorithmGui("Genetic Algorithm", &genetic)
 	};
 
 	Gui gui;
