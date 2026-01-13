@@ -27,7 +27,13 @@ namespace Lns
 
 	struct DestroyRandomRequests : public SolutionModifier
 	{
-		float fraction_to_remove = 0.1f;
+		float fraction_to_remove = .05f;
+		void operator()(PartialSolution& ps) override;
+		void draw() override;
+	};
+	struct DestroyWindowedRequests : public SolutionModifier
+	{
+		float window_fraction = .2f;
 		void operator()(PartialSolution& ps) override;
 		void draw() override;
 	};
