@@ -230,6 +230,21 @@ void Lns::RepairGreedyAppend::draw()
 #endif // SCFPDP_HEADLESS
 }
 
+void Lns::RepairGreedyFinishDriver::operator()(PartialSolution& ps)
+{
+	GreedyNearestAny rebuilder(*ps.sol.instance, ps.sol);
+	rebuilder.single_driver = true;
+	ps.sol = Algorithm::run(rebuilder);
+	ps.delta = DeltaCalculator(ps.sol);
+}
+
+void Lns::RepairGreedyFinishDriver::draw()
+{
+#ifndef SCFPDP_HEADLESS
+	ImGui::Text("Repair: Greedy Finish Driver");
+#endif // SCFPDP_HEADLESS
+}
+
 LargeNeighborhoodSearch::ModifierFunction::ModifierFunction(std::unique_ptr<Lns::SolutionModifier> f)
 	: func(std::move(f))
 {

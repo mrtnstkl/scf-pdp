@@ -53,6 +53,11 @@ namespace Lns
 		void operator()(PartialSolution& ps) override;
 		void draw() override;
 	};
+	struct RepairGreedyFinishDriver : public SolutionModifier
+	{
+		void operator()(PartialSolution& ps) override;
+		void draw() override;
+	};
 }
 
 class LargeNeighborhoodSearch : public Algorithm
