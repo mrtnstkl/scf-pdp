@@ -260,7 +260,7 @@ int main(int argc, char* argv[])
 			<< std::filesystem::path(opt_instance).stem().string()
 			<< ";" << solution.calculate_cost()
 			<< ";" << solution.calculate_fairness()
-			<< ";" << total_timer.get<std::chrono::milliseconds>();
+			<< ";" << total_timer.get_fp<std::milli>();
 
 		solution.write_to_file((*arg).c_str(), comment.str().c_str());
 		std::cout << "Solution written to " << (*arg) << "\n";

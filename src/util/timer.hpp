@@ -27,6 +27,13 @@ public:
 		stop_ = std::chrono::steady_clock::now();
 		return *this;
 	}
+	template <typename Duration, typename F = float>
+	auto get_fp()
+	{
+		const std::chrono::duration<F, Duration> d =
+			(running_ ? std::chrono::steady_clock::now() : stop_) - start_;
+		return d.count();
+	}
 	template <typename Duration = std::string>
 	auto get()
 	{
