@@ -17,20 +17,20 @@
 Lns::PartialSolution::PartialSolution(const Solution& solution)
 	: sol(solution), delta(solution)
 {
-	for (auto& request : solution.instance->requests)
-		unhandled_requests.push_back(&request);
+	// for (auto& request : solution.instance->requests)
+	// 	unhandled_requests.push_back(&request);
 	for (auto& route : sol.routes)
 	{
 		for (Node* node : route.nodes)
 		{
 			const CustomerRequest* cr = &solution.instance->get_request_from_node(node);
 			const auto cr_idx = solution.instance->get_index(cr);
-			unhandled_requests[cr_idx] = nullptr;
+			// unhandled_requests[cr_idx] = nullptr;
 		}
 	}
-	auto it = std::partition(unhandled_requests.begin(), unhandled_requests.end(),
-		[](const CustomerRequest* r) { return r != nullptr; });
-	unhandled_requests.erase(it, unhandled_requests.end());
+	// auto it = std::partition(unhandled_requests.begin(), unhandled_requests.end(),
+	// 	[](const CustomerRequest* r) { return r != nullptr; });
+	// unhandled_requests.erase(it, unhandled_requests.end());
 }
 
 void Lns::DestroyRandomRequests::operator()(PartialSolution& ps)
@@ -57,7 +57,7 @@ void Lns::DestroyRandomRequests::operator()(PartialSolution& ps)
 						*dropoff_it);
 					it = route.nodes.erase(std::find(route.nodes.begin(), route.nodes.end(), *dropoff_it));
 					pending_dropoff_removals.erase(dropoff_it);
-					ps.unhandled_requests.push_back(cr);
+					// ps.unhandled_requests.push_back(cr);
 					continue;
 				}
 			}
@@ -105,7 +105,7 @@ void Lns::DestroyMatchRouteTime::operator()(PartialSolution& ps)
 			Node* pickup = cr->pickup_node;
 			const auto pickup_it = std::prev(std::find(route.nodes.rbegin(), route.nodes.rend(), pickup).base());
 
-			ps.unhandled_requests.push_back(cr);
+			// ps.unhandled_requests.push_back(cr);
 			const auto old_route_sum = ps.delta.route_sum;
 
 			// remove dropoff
@@ -203,10 +203,12 @@ LargeNeighborhoodSearch::LargeNeighborhoodSearch(Instance* instance)
 {
 	// initialize modifier functions
 	destroy_functions_.emplace_back(std::make_unique<Lns::DestroyRandomRequests>());
-	destroy_functions_.emplace_back(std::make_unique<Lns::DestroyRandomRequests>());
+	// destroy_functions_.emplace_back(std::make_unique<Lns::DestroyRandomRequests>());
+	//destroy_functions_.emplace_back(std::make_unique<Lns::DestroyWindowedRequests>());
 	destroy_functions_.emplace_back(std::make_unique<Lns::DestroyMatchRouteTime>());
 	repair_functions_.emplace_back(std::make_unique<Lns::RepairGreedyInsertion>());
 	repair_functions_.emplace_back(std::make_unique<Lns::RepairGreedyAppend>());
+	repair_functions_.emplace_back(std::make_unique<Lns::RepairGreedyFinishDriver>());
 
 	reset();
 }

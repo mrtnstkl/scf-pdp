@@ -14,7 +14,7 @@ namespace Lns
 	struct PartialSolution
 	{
 		Solution sol;
-		std::vector<CustomerRequest*> unhandled_requests;
+		// std::vector<CustomerRequest*> unhandled_requests;
 		DeltaCalculator delta;
 		PartialSolution(const Solution& solution);
 	};
