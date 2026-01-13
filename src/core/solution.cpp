@@ -1,18 +1,24 @@
 #include "solution.h"
 
-#include <iostream>
+#include <algorithm>
 #include <fstream>
+#include <iostream>
+#include <numeric>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
-#include <numeric>
 
 #include "core/instance.h"
 
 #ifndef SCFPDP_HEADLESS
 #include "imgui.h"
 #endif // SCFPDP_HEADLESS
+
+
+// Fariness: 0: Jain, 1: Min-Max, 2: Gini
+#define FAIRNESS_MEASURE 2
+
 
 void SolutionMetrics::draw()
 {
@@ -56,8 +62,10 @@ Solution::Solution(Instance* instance, bool init)
 		route.depot = instance->depot;
 }
 
-float Solution::calculate_jain_fairness() const
+float Solution::calculate_fairness() const
 {
+#if FAIRNESS_MEASURE == 0
+	// Use Jain Fairness Index
 	const uint64_t n = instance->vehicle_count;
 	uint64_t route_sum = 0;
 	uint64_t route_sq_sum = 0;
@@ -68,6 +76,43 @@ float Solution::calculate_jain_fairness() const
 		route_sq_sum += d * d;
 	}
 	return route_sum * route_sum / float(n * route_sq_sum);
+#elif FAIRNESS_MEASURE == 1
+	// Use Min-Max Fairness
+	auto [min_it, max_it] = std::minmax_element(
+		routes.begin(), routes.end(),
+		[](const Route& a, const Route& b) {
+			return a.total_distance < b.total_distance;
+		});
+	return float(min_it->total_distance) / float(max_it->total_distance);
+#elif FAIRNESS_MEASURE == 2
+	// Use Inverted Gini Coefficient
+	const std::size_t nK = routes.size();
+
+	static thread_local std::vector<float> d;
+	d.clear();
+
+	float sum_d = 0.0;
+	for (const auto& r : routes)
+	{
+		float dist = static_cast<float>(r.total_distance);
+		d.push_back(dist);
+		sum_d += dist;
+	}
+
+	if (sum_d == 0.0)
+		return 1.0f;
+
+	float abs_diff_sum = 0.f;
+	for (std::size_t i = 0; i < nK; ++i)
+		for (std::size_t j = 0; j < nK; ++j)
+			abs_diff_sum += std::abs(d[i] - d[j]);
+
+	const float gini = 1.f - (abs_diff_sum / (2.f * nK * sum_d));
+
+	return static_cast<float>(gini);
+#else
+	#error "Fairness measure must be 0 (Jain), 1 (Min-Max), or 2 (Gini)"
+#endif
 }
 
 float Solution::calculate_cost() const
@@ -75,14 +120,14 @@ float Solution::calculate_cost() const
 	uint64_t route_sum = 0;
 	for (const auto& route : routes)
 		route_sum += route.total_distance;
-	return route_sum + instance->fairness * (1.f - calculate_jain_fairness());
+	return route_sum + instance->fairness * (1.f - calculate_fairness());
 }
 
 void Solution::calculate_metrics(SolutionMetrics& metrics) const
 {
 	metrics.route_count = routes.size();
 	metrics.total_cost = calculate_cost();
-	metrics.fairness = calculate_jain_fairness();
+	metrics.fairness = calculate_fairness();
 	metrics.valid = validate();
 }
 
@@ -239,7 +284,7 @@ Solution Solution::load_from_file(const char* path, Instance* instance)
 
 
 DeltaCalculator::DeltaCalculator(Instance* instance)
-	: instance(instance), route_sum(0), route_squares(instance->vehicle_count, 0)
+	: instance(instance), route_sum(0), route_distances(instance->vehicle_count, 0)
 {
 }
 
@@ -252,7 +297,11 @@ DeltaCalculator::DeltaCalculator(Instance* instance, const Solution& solution)
 		const Route& route = solution.routes[i];
 		const auto d = instance->calculate_route_time(route);
 		route_sum += d;
-		route_squares[i] = d * d;
+#if FAIRNESS_MEASURE == 0
+		route_distances[i] = d * d;
+#else
+		route_distances[i] = d;
+#endif
 	}
 }
 
@@ -265,7 +314,11 @@ DeltaCalculator::DeltaCalculator(const Solution& solution)
 		const Route& route = solution.routes[i];
 		const auto d = instance->calculate_route_time(route);
 		route_sum += d;
-		route_squares[i] = d * d;
+#if FAIRNESS_MEASURE == 0
+		route_distances[i] = d * d;
+#else
+		route_distances[i] = d;
+#endif
 	}
 }
 
@@ -276,22 +329,34 @@ void DeltaCalculator::add_stop(int route_id, const Node* prev_node, const Node* 
 		// this is the first stop of the route, so use depot distance (twice)
 		const auto d_depot = instance->get_distance(new_node);
 		route_sum += d_depot + d_depot;
-		route_squares[route_id] = d_depot * d_depot + d_depot * d_depot;
+#if FAIRNESS_MEASURE == 0
+		route_distances[route_id] = d_depot * d_depot + d_depot * d_depot;
+#else
+		route_distances[route_id] = d_depot + d_depot;
+#endif
 		return;
 	}
 	// we are inserting at the end, so we:
 	// 1. add our own depot distance
 	const auto d_depot_new = instance->get_distance(new_node);
 	route_sum += d_depot_new;
-	route_squares[route_id] += d_depot_new * d_depot_new;
 	// 2. subtract the old depot distance
 	const auto d_depot_old = instance->get_distance(prev_node);
 	route_sum -= d_depot_old;
-	route_squares[route_id] -= d_depot_old * d_depot_old;
 	// 3. add the distance to the previous node
 	const auto d_prev = instance->get_distance(prev_node, new_node);
 	route_sum += d_prev;
-	route_squares[route_id] += d_prev * d_prev;
+#if FAIRNESS_MEASURE == 0
+	// when using Jain Fairness, we use squares of distances
+	route_distances[route_id] += d_depot_new * d_depot_new;
+	route_distances[route_id] -= d_depot_old * d_depot_old;
+	route_distances[route_id] += d_prev * d_prev;
+#else
+	// otherwise, we use simple distances
+	route_distances[route_id] += d_depot_new;
+	route_distances[route_id] -= d_depot_old;
+	route_distances[route_id] += d_prev;
+#endif
 }
 
 void DeltaCalculator::add_stop(int route_id, const Node* prev_node, const Node* new_node, const Node* next_node)
@@ -312,15 +377,24 @@ void DeltaCalculator::add_stop(int route_id, const Node* prev_node, const Node* 
 	// 1. add the distance to the first
 	const auto d_prev = instance->get_distance(new_node, prev_node);
 	route_sum += d_prev;
-	route_squares[route_id] += d_prev * d_prev;
 	// 2. add the distance to the second
 	const auto d_next = instance->get_distance(new_node, next_node);
 	route_sum += d_next;
-	route_squares[route_id] += d_next * d_next;
 	// 3. remove the distance between the two
 	const auto d_prev_next = instance->get_distance(prev_node, next_node);
 	route_sum -= d_prev_next;
-	route_squares[route_id] -= d_prev_next * d_prev_next;
+
+#if FAIRNESS_MEASURE == 0
+	// when using Jain Fairness, we use squares of distances
+	route_distances[route_id] += d_prev * d_prev;
+	route_distances[route_id] += d_next * d_next;
+	route_distances[route_id] -= d_prev_next * d_prev_next;
+#else
+	// otherwise, we use simple distances
+	route_distances[route_id] += d_prev;
+	route_distances[route_id] += d_next;
+	route_distances[route_id] -= d_prev_next;
+#endif
 }
 
 void DeltaCalculator::remove_stop(int route_id, const Node* prev_node, const Node* old_node)
@@ -329,22 +403,31 @@ void DeltaCalculator::remove_stop(int route_id, const Node* prev_node, const Nod
 	{
 		// we are removing the only node in the route
 		route_sum = 0;
-		route_squares[route_id] = 0;
+		route_distances[route_id] = 0;
 		return;
 	}
 	// we are removing the last node in the route, so we:
 	// 1. remove our own depot distance
 	const auto d_depot_old = instance->get_distance(old_node);
 	route_sum -= d_depot_old;
-	route_squares[route_id] -= d_depot_old * d_depot_old;
 	// 2. add the old depot distance
 	const auto d_depot_new = instance->get_distance(prev_node);
 	route_sum += d_depot_new;
-	route_squares[route_id] += d_depot_new * d_depot_new;
 	// 3. remove the distance to the previous node
 	const auto d_prev = instance->get_distance(prev_node, old_node);
 	route_sum -= d_prev;
-	route_squares[route_id] -= d_prev * d_prev;
+
+#if FAIRNESS_MEASURE == 0
+	// when using Jain Fairness, we use squares of distances
+	route_distances[route_id] -= d_depot_old * d_depot_old;
+	route_distances[route_id] += d_depot_new * d_depot_new;
+	route_distances[route_id] -= d_prev * d_prev;
+#else
+	// otherwise, we use simple distances
+	route_distances[route_id] -= d_depot_old;
+	route_distances[route_id] += d_depot_new;
+	route_distances[route_id] -= d_prev;
+#endif
 }
 
 void DeltaCalculator::remove_stop(int route_id, const Node* prev_node, const Node* old_node, const Node* next_node)
@@ -364,15 +447,24 @@ void DeltaCalculator::remove_stop(int route_id, const Node* prev_node, const Nod
 	// 1. remove the distance to the first
 	const auto d_prev = instance->get_distance(old_node, prev_node);
 	route_sum -= d_prev;
-	route_squares[route_id] -= d_prev * d_prev;
 	// 2. remove the distance to the second
 	const auto d_next = instance->get_distance(old_node, next_node);
 	route_sum -= d_next;
-	route_squares[route_id] -= d_next * d_next;
 	// 3. add the distance between the two
 	const auto d_prev_next = instance->get_distance(prev_node, next_node);
 	route_sum += d_prev_next;
-	route_squares[route_id] += d_prev_next * d_prev_next;
+
+#if FAIRNESS_MEASURE == 0
+	// when using Jain Fairness, we use squares of distances
+	route_distances[route_id] -= d_prev * d_prev;
+	route_distances[route_id] -= d_next * d_next;
+	route_distances[route_id] += d_prev_next * d_prev_next;
+#else
+	// otherwise, we use simple distances
+	route_distances[route_id] -= d_prev;
+	route_distances[route_id] -= d_next;
+	route_distances[route_id] += d_prev_next;
+#endif
 }
 
 void DeltaCalculator::swap_stops(int route_id, const Node* node_prev_a, const Node* node_a,
@@ -383,34 +475,79 @@ void DeltaCalculator::swap_stops(int route_id, const Node* node_prev_a, const No
 		? instance->get_distance(node_a)
 		: instance->get_distance(node_prev_a, node_a);
 	route_sum -= d_a_to_prev;
-	route_squares[route_id] -= d_a_to_prev * d_a_to_prev;
 	// 2. remove edges between B and its successor
 	const auto d_b_to_after = (node_after_b == nullptr)
-		? instance->get_distance(node_b)
-		: instance->get_distance(node_b, node_after_b);
+	? instance->get_distance(node_b)
+	: instance->get_distance(node_b, node_after_b);
 	route_sum -= d_b_to_after;
-	route_squares[route_id] -= d_b_to_after * d_b_to_after;
 	// 3. add edge between A and its new successor
 	const auto d_a_to_after = (node_after_b == nullptr)
-		? instance->get_distance(node_a)
-		: instance->get_distance(node_a, node_after_b);
+	? instance->get_distance(node_a)
+	: instance->get_distance(node_a, node_after_b);
 	route_sum += d_a_to_after;
-	route_squares[route_id] += d_a_to_after * d_a_to_after;
 	// 4. add edge between B and its new predecessor
 	const auto d_b_to_prev = (node_prev_a == nullptr)
-		? instance->get_distance(node_b)
-		: instance->get_distance(node_prev_a, node_b);
+	? instance->get_distance(node_b)
+	: instance->get_distance(node_prev_a, node_b);
 	route_sum += d_b_to_prev;
-	route_squares[route_id] += d_b_to_prev * d_b_to_prev;
+
+#if FAIRNESS_MEASURE == 0
+	// when using Jain Fairness, we use squares of distances
+	route_distances[route_id] -= d_a_to_prev * d_a_to_prev;
+	route_distances[route_id] -= d_b_to_after * d_b_to_after;
+	route_distances[route_id] += d_a_to_after * d_a_to_after;
+	route_distances[route_id] += d_b_to_prev * d_b_to_prev;
+#else
+	// otherwise, we use simple distances
+	route_distances[route_id] -= d_a_to_prev;
+	route_distances[route_id] -= d_b_to_after;
+	route_distances[route_id] += d_a_to_after;
+	route_distances[route_id] += d_b_to_prev;
+#endif
 }
 
 
 float DeltaCalculator::fairness() const
 {
+#if FAIRNESS_MEASURE == 0
+	// Use Jain Fairness Index 
 	return (route_sum * route_sum) / float(
-		route_squares.size() *
-		std::accumulate(route_squares.begin(), route_squares.end(), uint64_t(0))
+		route_distances.size() *
+		std::accumulate(route_distances.begin(), route_distances.end(), uint64_t(0))
 	);
+#elif FAIRNESS_MEASURE == 1
+	// Use Min-Max Fairness
+	auto [min_it, max_it] = std::minmax_element(
+		route_distances.begin(), route_distances.end(),
+		[](const uint64_t& a, const uint64_t& b) { return a < b; });
+	return float(*min_it) / float(*max_it);
+#elif FAIRNESS_MEASURE == 2
+	// Use Inverted Gini Coefficient
+	const std::size_t nK = route_distances.size();
+
+	static thread_local std::vector<float> d;
+	d.clear();
+
+	float sum_d = 0.f;
+	for (const auto dist : route_distances)
+	{
+		d.push_back((float)dist);
+		sum_d += (float)dist;
+	}
+
+	if (sum_d == 0.f)
+		return 1.f;
+
+	float abs_diff_sum = 0.f;
+	for (std::size_t i = 0; i < nK; ++i)
+		for (std::size_t j = 0; j < nK; ++j)
+			abs_diff_sum += std::abs(d[i] - d[j]);
+
+	const float gini = 1.f - (abs_diff_sum / (2.f * nK * sum_d));
+	return static_cast<float>(gini);
+#else
+	#error "Fairness measure must be 0 (Jain), 1 (Min-Max), or 2 (Gini)"
+#endif
 }
 
 float DeltaCalculator::cost() const

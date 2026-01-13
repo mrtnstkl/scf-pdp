@@ -38,7 +38,7 @@ struct Solution
 
 	Solution(Instance* instance, bool init = false);
 
-	float calculate_jain_fairness() const;
+	float calculate_fairness() const;
 
 	float calculate_cost() const;
 
@@ -86,8 +86,12 @@ struct Solution
 struct DeltaCalculator
 {
 	Instance* instance;
+	// sum of all route distances
 	uint64_t route_sum;
-	std::vector<uint64_t> route_squares;
+	// `route_distances` either stores the actual distances or
+	// their squares, depending on the fairness measure
+	// squares are used for Jain's fairness measure (`FAIRNESS_MEASURE == 0`)
+	std::vector<uint64_t> route_distances;
 
 	DeltaCalculator(Instance* instance);
 	[[deprecated]] DeltaCalculator(Instance* instance, const Solution& solution);
