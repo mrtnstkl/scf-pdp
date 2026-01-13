@@ -17,7 +17,7 @@
 
 
 // Fariness: 0: Jain, 1: Min-Max, 2: Gini
-#define FAIRNESS_MEASURE 2
+#define FAIRNESS_MEASURE 0
 
 
 void SolutionMetrics::draw()
