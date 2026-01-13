@@ -246,7 +246,9 @@ int main(int argc, char* argv[])
 
 	if (arg != args.end())
 	{
-		solution.write_to_file((*arg).c_str());
+		std::stringstream comment;
+		comment << "solution" << ";" << solution.calculate_cost();
+		solution.write_to_file((*arg).c_str(), comment.str().c_str());
 		std::cout << "Solution written to " << (*arg) << "\n";
 	}
 
