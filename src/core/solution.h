@@ -145,4 +145,39 @@ struct DeltaCalculator
 	float cost() const;
 	float cost(float fairness) const;
 	std::pair<float, float> cost_with_fairness() const;
+
+	template<typename Container>
+	void add_stop(int route_id, Container& container, Container::iterator position, const Node* new_node);
+
+	template<typename Container>
+	void remove_stop(int route_id, Container& container, Container::iterator position);
 };
+
+template <typename Container>
+inline void DeltaCalculator::add_stop(int route_id, Container& container,
+	Container::iterator position, const Node* new_node)
+{
+	if (position == container.end())
+	{
+		const Node* prev_node = container.empty() ? nullptr : *(std::prev(position));
+		add_stop(route_id, prev_node, new_node);
+	}
+	else
+	{
+		const Node* prev_node = (position == container.begin()) ? nullptr : *(std::prev(position));
+		const Node* next_node = *position;
+		add_stop(route_id, prev_node, new_node, next_node);
+	}
+}
+
+template <typename Container>
+inline void DeltaCalculator::remove_stop(
+	int route_id, Container& container, Container::iterator position)
+{
+	if (position == container.end())
+		return;
+	const Node* old_node = *position;
+	const Node* prev_node = (position == container.begin()) ? nullptr : *(std::prev(position));
+	const Node* next_node = (std::next(position) == container.end()) ? nullptr : *(std::next(position));
+	remove_stop(route_id, prev_node, old_node, next_node);
+}
