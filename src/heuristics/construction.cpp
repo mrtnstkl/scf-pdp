@@ -175,7 +175,7 @@ size_t GreedyNearestAny::step()
 		s.done = true;
 		return s.step;
 	}
-	if (auto it = s.busy_drivers.begin(); it->first == 0)
+	if (auto it = single_driver ? std::prev(s.busy_drivers.end()) : s.busy_drivers.begin(); it->first == 0)
 	{
 		// find the closest pickup location to the depot
 		std::pair<dist_t, Node*> closest = {UINT16_MAX, nullptr};
@@ -194,9 +194,9 @@ size_t GreedyNearestAny::step()
 		return ++s.step;
 	}
 
-	// select the driver that is furthest behind
-	Driver driver = std::move(s.busy_drivers.begin()->second);
-	s.busy_drivers.erase(s.busy_drivers.begin());
+	auto driver_it = single_driver ? std::prev(s.busy_drivers.end()) : s.busy_drivers.begin();
+	Driver driver = std::move(driver_it->second);
+	s.busy_drivers.erase(driver_it);
 
 	// find the closest node that is either...
 	std::pair<dist_t, Node*> closest = {UINT16_MAX, nullptr};
@@ -226,6 +226,12 @@ size_t GreedyNearestAny::step()
 	if (closest_node == nullptr)
 	{
 		s.finished_drivers.emplace_back(std::move(driver));
+		if (single_driver)
+		{
+			for (auto& [_, d] : s.busy_drivers)
+				s.finished_drivers.emplace_back(std::move(d));
+			s.busy_drivers.clear();
+		}
 		return s.step;
 	}
 
@@ -241,6 +247,13 @@ size_t GreedyNearestAny::step()
 	else
 		s.served_requests++;
 	return ++s.step;
+}
+
+void GreedyNearestAny::draw()
+{
+#ifndef SCFPDP_HEADLESS
+	ImGui::Checkbox("Single Driver Mode", &single_driver);
+#endif // SCFPDP_HEADLESS
 }
 
 size_t GreedyRandomizedClosest::step()

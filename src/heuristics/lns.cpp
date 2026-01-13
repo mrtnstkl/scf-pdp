@@ -17,20 +17,20 @@
 Lns::PartialSolution::PartialSolution(const Solution& solution)
 	: sol(solution), delta(solution)
 {
-	for (auto& request : solution.instance->requests)
-		unhandled_requests.push_back(&request);
+	// for (auto& request : solution.instance->requests)
+	// 	unhandled_requests.push_back(&request);
 	for (auto& route : sol.routes)
 	{
 		for (Node* node : route.nodes)
 		{
 			const CustomerRequest* cr = &solution.instance->get_request_from_node(node);
 			const auto cr_idx = solution.instance->get_index(cr);
-			unhandled_requests[cr_idx] = nullptr;
+			// unhandled_requests[cr_idx] = nullptr;
 		}
 	}
-	auto it = std::partition(unhandled_requests.begin(), unhandled_requests.end(),
-		[](const CustomerRequest* r) { return r != nullptr; });
-	unhandled_requests.erase(it, unhandled_requests.end());
+	// auto it = std::partition(unhandled_requests.begin(), unhandled_requests.end(),
+	// 	[](const CustomerRequest* r) { return r != nullptr; });
+	// unhandled_requests.erase(it, unhandled_requests.end());
 }
 
 void Lns::DestroyRandomRequests::operator()(PartialSolution& ps)
@@ -57,7 +57,7 @@ void Lns::DestroyRandomRequests::operator()(PartialSolution& ps)
 						*dropoff_it);
 					it = route.nodes.erase(std::find(route.nodes.begin(), route.nodes.end(), *dropoff_it));
 					pending_dropoff_removals.erase(dropoff_it);
-					ps.unhandled_requests.push_back(cr);
+					// ps.unhandled_requests.push_back(cr);
 					continue;
 				}
 			}
@@ -86,6 +86,79 @@ void Lns::DestroyRandomRequests::draw()
 #endif // SCFPDP_HEADLESS
 }
 
+void Lns::DestroyWindowedRequests::operator()(PartialSolution& ps)
+{
+	// todo: this is slow and crashes for small windows
+	static thread_local std::mt19937 rng(std::random_device{}());
+	const auto longest_route_time = std::max_element(ps.sol.routes.begin(), ps.sol.routes.end(),
+		[](const Route& a, const Route& b) { return a.total_distance < b.total_distance; })->total_distance;
+
+	const dist_t window_size = static_cast<dist_t>(longest_route_time * window_fraction);
+	std::uniform_int_distribution<dist_t> dist(0, longest_route_time - window_size);
+	const dist_t window_start = dist(rng);
+	const dist_t window_end = window_start + window_size;
+
+	for (int route_id = 0; route_id < ps.sol.routes.size(); ++route_id)
+	{
+		Route& route = ps.sol.routes[route_id];
+		uint64_t cumulative_distance = 0;
+		decltype(Route::nodes)::iterator first_to_remove = route.nodes.end();
+		decltype(Route::nodes)::iterator last_to_remove = route.nodes.end();
+		std::unordered_set<Node*> pending_dropoff_removals;
+
+		for (auto it = route.nodes.begin(); it != route.nodes.end(); )
+		{
+			Node* node = *it;
+			if (it == route.nodes.begin())
+				cumulative_distance += ps.sol.instance->get_distance(node);
+			else
+				cumulative_distance += ps.sol.instance->get_distance(*(std::prev(it)), node);
+			
+			if (cumulative_distance < window_start)
+			{
+				++it;
+				continue;
+			}
+			else if (cumulative_distance > window_end)
+				break;
+
+			if (node->is_pickup())
+			{
+				if (first_to_remove == route.nodes.end())
+					first_to_remove = it;
+				auto* cr = &ps.sol.instance->get_request_from_node(node);
+				pending_dropoff_removals.insert(cr->dropoff_node);
+				// ps.unhandled_requests.push_back(cr);
+			}
+			else
+			{
+				pending_dropoff_removals.erase(node);
+			}
+			last_to_remove = ++it;
+		}
+		route.nodes.erase(first_to_remove, last_to_remove);
+
+		for (auto it = last_to_remove; it != route.nodes.end() && !pending_dropoff_removals.empty(); )
+		{
+			if (pending_dropoff_removals.contains(*it))
+				it = route.nodes.erase(it);
+			else
+				++it;
+		}
+	}
+	ps.delta = DeltaCalculator(ps.sol);
+}
+
+void Lns::DestroyWindowedRequests::draw()
+{
+#ifndef SCFPDP_HEADLESS
+	ImGui::PushID(this);
+	ImGui::Text("Destroy: Windowed Requests");
+	ImGui::SliderFloat("Window Fraction", &window_fraction, 0.0f, 1.0f);
+	ImGui::PopID();
+#endif // SCFPDP_HEADLESS
+}
+
 void Lns::DestroyMatchRouteTime::operator()(PartialSolution& ps)
 {
 	uint64_t shortest_route = std::numeric_limits<uint64_t>::max(); 
@@ -105,7 +178,7 @@ void Lns::DestroyMatchRouteTime::operator()(PartialSolution& ps)
 			Node* pickup = cr->pickup_node;
 			const auto pickup_it = std::prev(std::find(route.nodes.rbegin(), route.nodes.rend(), pickup).base());
 
-			ps.unhandled_requests.push_back(cr);
+			// ps.unhandled_requests.push_back(cr);
 			const auto old_route_sum = ps.delta.route_sum;
 
 			// remove dropoff
@@ -157,6 +230,21 @@ void Lns::RepairGreedyAppend::draw()
 #endif // SCFPDP_HEADLESS
 }
 
+void Lns::RepairGreedyFinishDriver::operator()(PartialSolution& ps)
+{
+	GreedyNearestAny rebuilder(*ps.sol.instance, ps.sol);
+	rebuilder.single_driver = true;
+	ps.sol = Algorithm::run(rebuilder);
+	ps.delta = DeltaCalculator(ps.sol);
+}
+
+void Lns::RepairGreedyFinishDriver::draw()
+{
+#ifndef SCFPDP_HEADLESS
+	ImGui::Text("Repair: Greedy Finish Driver");
+#endif // SCFPDP_HEADLESS
+}
+
 LargeNeighborhoodSearch::ModifierFunction::ModifierFunction(std::unique_ptr<Lns::SolutionModifier> f)
 	: func(std::move(f))
 {
@@ -203,10 +291,12 @@ LargeNeighborhoodSearch::LargeNeighborhoodSearch(Instance* instance)
 {
 	// initialize modifier functions
 	destroy_functions_.emplace_back(std::make_unique<Lns::DestroyRandomRequests>());
-	destroy_functions_.emplace_back(std::make_unique<Lns::DestroyRandomRequests>());
+	// destroy_functions_.emplace_back(std::make_unique<Lns::DestroyRandomRequests>());
+	//destroy_functions_.emplace_back(std::make_unique<Lns::DestroyWindowedRequests>());
 	destroy_functions_.emplace_back(std::make_unique<Lns::DestroyMatchRouteTime>());
 	repair_functions_.emplace_back(std::make_unique<Lns::RepairGreedyInsertion>());
 	repair_functions_.emplace_back(std::make_unique<Lns::RepairGreedyAppend>());
+	repair_functions_.emplace_back(std::make_unique<Lns::RepairGreedyFinishDriver>());
 
 	reset();
 }

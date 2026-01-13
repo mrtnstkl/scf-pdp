@@ -58,10 +58,13 @@ struct RandomConstruction : public GreedyConstruction
 
 struct GreedyNearestAny : public GreedyConstruction
 {
+	bool single_driver = false;
+
 	GreedyNearestAny(Instance* instance);
 	GreedyNearestAny(Instance& instance, const Solution& initial_solution);
 
 	size_t step() override;
+	void draw() override;
 };
 
 struct GreedyRandomizedClosest : public GreedyConstruction

@@ -14,7 +14,7 @@ namespace Lns
 	struct PartialSolution
 	{
 		Solution sol;
-		std::vector<CustomerRequest*> unhandled_requests;
+		// std::vector<CustomerRequest*> unhandled_requests;
 		DeltaCalculator delta;
 		PartialSolution(const Solution& solution);
 	};
@@ -27,7 +27,13 @@ namespace Lns
 
 	struct DestroyRandomRequests : public SolutionModifier
 	{
-		float fraction_to_remove = 0.1f;
+		float fraction_to_remove = .05f;
+		void operator()(PartialSolution& ps) override;
+		void draw() override;
+	};
+	struct DestroyWindowedRequests : public SolutionModifier
+	{
+		float window_fraction = .2f;
 		void operator()(PartialSolution& ps) override;
 		void draw() override;
 	};
@@ -43,6 +49,11 @@ namespace Lns
 		void draw() override;
 	};
 	struct RepairGreedyAppend : public SolutionModifier
+	{
+		void operator()(PartialSolution& ps) override;
+		void draw() override;
+	};
+	struct RepairGreedyFinishDriver : public SolutionModifier
 	{
 		void operator()(PartialSolution& ps) override;
 		void draw() override;
