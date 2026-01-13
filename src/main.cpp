@@ -248,13 +248,20 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
+	Timer total_timer;
 	solution = Algorithm::run(*algorithm);
+	total_timer.stop();
 	solution.print();
 
 	if (arg != args.end())
 	{
 		std::stringstream comment;
-		comment << std::filesystem::path(opt_instance).stem().string() << ";" << solution.calculate_cost();
+		comment
+			<< std::filesystem::path(opt_instance).stem().string()
+			<< ";" << solution.calculate_cost()
+			<< ";" << solution.calculate_fairness()
+			<< ";" << total_timer.get<std::chrono::milliseconds>();
+
 		solution.write_to_file((*arg).c_str(), comment.str().c_str());
 		std::cout << "Solution written to " << (*arg) << "\n";
 	}
