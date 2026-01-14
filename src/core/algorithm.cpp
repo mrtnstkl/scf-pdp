@@ -11,16 +11,17 @@
 
 Algorithm::~Algorithm() { worker.stop(); }
 
-Solution Algorithm::run(Algorithm& algorithm)
-{ 
-	algorithm.reset();
+Solution Algorithm::run(Algorithm& algorithm, bool reset_algorithm)
+{
+	if (reset_algorithm)
+		algorithm.reset();
 	while (!algorithm.done())
 		algorithm.step();
 	return algorithm.get_current_solution();
 }
 
-Solution Algorithm::run(Algorithm&& algorithm)
-{ 
+Solution Algorithm::run(Algorithm&& algorithm, bool reset_algorithm)
+{
 	algorithm.reset();
 	while (!algorithm.done())
 		algorithm.step();

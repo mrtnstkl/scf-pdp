@@ -205,7 +205,7 @@ void Lns::DestroyMatchRouteTime::draw()
 void Lns::RepairGreedyInsertion::operator()(PartialSolution& ps)
 {
 	GreedyInsertion rebuilder(ps.sol.instance, ps.sol);
-	ps.sol = Algorithm::run(rebuilder);
+	ps.sol = Algorithm::run(rebuilder, false);
 	ps.delta = DeltaCalculator(ps.sol);
 }
 
@@ -219,7 +219,7 @@ void Lns::RepairGreedyInsertion::draw()
 void Lns::RepairGreedyAppend::operator()(PartialSolution& ps)
 {
 	GreedyNearestAny rebuilder(*ps.sol.instance, ps.sol);
-	ps.sol = Algorithm::run(rebuilder);
+	ps.sol = Algorithm::run(rebuilder, false);
 	ps.delta = DeltaCalculator(ps.sol);
 }
 
@@ -234,7 +234,7 @@ void Lns::RepairGreedyFinishDriver::operator()(PartialSolution& ps)
 {
 	GreedyNearestAny rebuilder(*ps.sol.instance, ps.sol);
 	rebuilder.single_driver = true;
-	ps.sol = Algorithm::run(rebuilder);
+	ps.sol = Algorithm::run(rebuilder, false);
 	ps.delta = DeltaCalculator(ps.sol);
 }
 
@@ -349,13 +349,13 @@ void LargeNeighborhoodSearch::reset()
 			initial_soln = Solution::load_from_file("solutions/current_solution.sln", instance_);
 		break;
 	case GREEDY_NEAREST_ANY:
-		initial_soln = Algorithm::run(GreedyNearestAny(instance_));
+		initial_soln = Algorithm::run(GreedyNearestAny(instance_), false);
 		break;
 	case GREEDY_RANDOMIZED_CLOSEST:
-		initial_soln = Algorithm::run(GreedyRandomizedClosest(instance_));
+		initial_soln = Algorithm::run(GreedyRandomizedClosest(instance_), false);
 		break;
 	case RANDOM_CONSTRUCTION:
-		initial_soln = Algorithm::run(RandomConstruction(instance_));;
+		initial_soln = Algorithm::run(RandomConstruction(instance_), false);
 		break;
 	}
 
