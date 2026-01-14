@@ -109,7 +109,8 @@ struct GreedyInsertion : public Algorithm
 		{
 			bool operator()(const CustomerRequest* a, const CustomerRequest* b) const;
 		};
-		std::map<CustomerRequest*, std::map<dist_t, NearbyNode>, NodeOrder> unserved_requests;
+		std::vector<CustomerRequest*> unserved_sorted;
+		size_t unserved_cursor = 0; // next unserved index
 		DeltaCalculator delta;
 		State(Solution& initial_solution)
 			: delta(initial_solution) {}
