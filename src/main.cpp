@@ -102,6 +102,7 @@ int main(int argc, char* argv[])
 	auto usage_vnd = args[0] + " vnd <instance> <initial_solution>";
 	auto usage_grasp = args[0] + " grasp <instance> <candidates> <tightening> <neighborhood_type> <strategy (\"first\"|\"best\")> <stagnation_limit>";
 	auto usage_lns = args[0] + " lns <instance> <stagnation_limit> <reaction_factor>";
+	auto usage_genetic = args[0] + " genetic <instance> <population_size> <elite_fraction> <mutant_fraction> <elite_bias> <max_generations>";
 
 	if (args.size() < 2)
 	{
@@ -116,7 +117,8 @@ int main(int argc, char* argv[])
 			<< "  " << usage_localsearch << "\n"
 			<< "  " << usage_vnd << "\n"
 			<< "  " << usage_grasp << "\n"
-			<< "  " << usage_lns << "\n";
+			<< "  " << usage_lns << "\n"
+			<< "  " << usage_genetic << "\n";
 		return 1;
 	}
 	else if (args.size() == 2)
@@ -241,6 +243,22 @@ int main(int argc, char* argv[])
 		lns->stopping_criterion.stagnation_limit = std::stoi(*(arg++));
 		lns->reaction_factor = std::stof(*(arg++));
 		algorithm = lns;
+	}
+	else if (opt_algo == "genetic")
+	{
+		// <instance> <population_size> <elite_fraction> <mutant_fraction> <elite_bias> <max_generations>
+		if (args.size() < 8)
+		{
+			std::cerr << "Usage: " << usage_genetic << "\n";
+			return 1;
+		}
+		auto* genetic = new GeneticAlgorithm(&instance);
+		genetic->population_size = std::stoi(*(arg++));
+		genetic->elite_fraction = std::stof(*(arg++));
+		genetic->mutant_fraction = std::stof(*(arg++));
+		genetic->elite_bias = std::stof(*(arg++));
+		genetic->max_generations = std::stoi(*(arg++));
+		algorithm = genetic;
 	}
 	else
 	{
