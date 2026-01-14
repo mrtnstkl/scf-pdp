@@ -34,8 +34,8 @@ struct GeneticAlgorithm : public Algorithm
 	float mutant_fraction = 0.10f;
 	float elite_bias = 0.70f;
 
-	int generations_per_step = 5;
-	int max_generations = 2000;
+	int generations_per_step = 1;
+	int max_generations = 1000;
 
 	float select_threshold = 0.55f;
 	int mutate_requests = 2;
@@ -71,7 +71,6 @@ private:
 
 	// decoding & eval
 	Solution decode_to_solution(const Individual& ind) const;
-	float evaluate_objective(const Solution& sol) const;
 
 	// helpers
 	size_t request_count() const;

@@ -25,9 +25,6 @@ GeneticAlgorithm::GeneticAlgorithm(Instance* instance)
 
 void GeneticAlgorithm::reset()
 {
-	// visualizer expects worker-based synchronisation
-	std::lock_guard<std::mutex> lock(worker.data_mutex);
-
 	finished = false;
 	generation = 0;
 	best_step = 0;
@@ -41,7 +38,7 @@ void GeneticAlgorithm::reset()
 	for (auto& ind : population)
 	{
 		Solution sol = decode_to_solution(ind);
-		ind.objective = evaluate_objective(sol);
+		ind.objective = sol.calculate_cost();
 
 		if (ind.objective < best_individual.objective)
 		{
@@ -51,15 +48,13 @@ void GeneticAlgorithm::reset()
 	}
 
 	best_solution.calculate_metrics(metrics);
-	metrics.step = best_step;
+	metrics.step = 0;
 }
 
 size_t GeneticAlgorithm::step()
 {
-	std::lock_guard<std::mutex> lock(worker.data_mutex);
-
 	if (finished)
-		return best_step;
+		return metrics.step;
 
 	// clamp settings
 	population_size = std::max(10, population_size);
@@ -74,7 +69,7 @@ size_t GeneticAlgorithm::step()
 	if ((int)population.size() != population_size)
 	{
 		reset();
-		return best_step;
+		return metrics.step;
 	}
 
 	const int elite_count = std::max(1, (int)std::floor(population_size * elite_fraction));
@@ -104,7 +99,6 @@ size_t GeneticAlgorithm::step()
 			best_individual = population.front();
 			best_solution = decode_to_solution(best_individual);
 			best_solution.calculate_metrics(metrics);
-			metrics.step = best_step;
 		}
 
 		if ((int)generation >= max_generations)
@@ -130,14 +124,13 @@ size_t GeneticAlgorithm::step()
 			mutate(child);
 
 			Solution sol = decode_to_solution(child);
-			child.objective = evaluate_objective(sol);
+			child.objective = sol.calculate_cost();
 
 			if (child.objective < best_individual.objective)
 			{
 				best_individual = child;
 				best_solution = sol;
 				best_solution.calculate_metrics(metrics);
-				metrics.step = best_step;
 			}
 
 			next.push_back(std::move(child));
@@ -148,14 +141,13 @@ size_t GeneticAlgorithm::step()
 		{
 			Individual m = make_random_individual();
 			Solution sol = decode_to_solution(m);
-			m.objective = evaluate_objective(sol);
+			m.objective = sol.calculate_cost();
 
 			if (m.objective < best_individual.objective)
 			{
 				best_individual = m;
 				best_solution = sol;
 				best_solution.calculate_metrics(metrics);
-				metrics.step = best_step;
 			}
 
 			next.push_back(std::move(m));
@@ -164,18 +156,16 @@ size_t GeneticAlgorithm::step()
 		population = std::move(next);
 	}
 
-	return best_step;
+	return ++metrics.step;
 }
 
 bool GeneticAlgorithm::done()
 {
-	std::lock_guard<std::mutex> lock(worker.data_mutex);
 	return finished;
 }
 
 Solution GeneticAlgorithm::get_current_solution()
 {
-	std::lock_guard<std::mutex> lock(worker.data_mutex);
 	return best_solution;
 }
 
@@ -345,14 +335,6 @@ Solution GeneticAlgorithm::decode_to_solution(const Individual& ind) const
 	}
 
 	return sol;
-}
-
-float GeneticAlgorithm::evaluate_objective(const Solution& sol) const
-{
-	// matches your instance field: instance->fairness
-	const float total = sol.calculate_cost();
-	const float jain = sol.calculate_fairness();
-	return total + instance->fairness * (1.0f - jain);
 }
 
 void GeneticAlgorithm::draw()
