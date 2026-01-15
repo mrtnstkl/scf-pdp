@@ -8,21 +8,30 @@
 #include "imgui.h"
 #endif // SCFPDP_HEADLESS
 
+/**
+ * @brief Create a GA solver.
+ */
 GeneticAlgorithm::GeneticAlgorithm(Instance* instance)
 	: instance(instance)
-	, best_solution(instance) // IMPORTANT: Solution has no default ctor
+	, best_solution(instance) // Solution has no default ctor
 {
-	std::seed_seq seq{
-		(uint32_t)instance->vehicle_count,
-		(uint32_t)instance->min_requests,
-		(uint32_t)instance->vehicle_capacity,
-		(uint32_t)instance->request_count
-	};
-	rng.seed(seq);
-
+	//std::seed_seq seq{
+	//	(uint32_t)instance->vehicle_count,
+	//	(uint32_t)instance->min_requests,
+	//	(uint32_t)instance->vehicle_capacity,
+	//	(uint32_t)instance->request_count
+	//};
+	//rng.seed(seq);
+	rng.seed(std::random_device{}());
 	reset();
 }
 
+/**
+ * @brief Reset the search.
+ *
+ * This discards any previously found solutions and starts again with a fresh,
+ * randomly initialised population.
+ */
 void GeneticAlgorithm::reset()
 {
 	finished = false;
@@ -35,6 +44,7 @@ void GeneticAlgorithm::reset()
 
 	initialise_population();
 
+	// Evaluate each individual and remember the best one.
 	for (auto& ind : population)
 	{
 		Solution sol = decode_to_solution(ind);
@@ -51,12 +61,31 @@ void GeneticAlgorithm::reset()
 	metrics.step = 0;
 }
 
+/**
+ * @brief Advance the GA by a small amount of work.
+ *
+ * In each call we run @ref generations_per_step GA generations.
+ *
+ * One GA generation consists of:
+ * 1) Sort population by objective (best first).
+ * 2) Copy the best @ref elite_fraction unchanged into the next generation.
+ * 3) Create new offspring by crossover (elite x non-elite) + mutation.
+ * 4) Add a small number of brand new random individuals ("mutants") to keep
+ *    diversity and reduce premature convergence.
+ */
 size_t GeneticAlgorithm::step()
 {
 	if (finished)
 		return metrics.step;
 
-	// clamp settings
+	// The framework's worker can request a stop (e.g., UI button).
+	if (worker.stop_requested)
+	{
+		finished = true;
+		return metrics.step;
+	}
+
+	// Keep parameters in a sane range, even if the UI sets weird values.
 	population_size = std::max(10, population_size);
 	elite_fraction = std::clamp(elite_fraction, 0.01f, 0.90f);
 	mutant_fraction = std::clamp(mutant_fraction, 0.00f, 0.90f);
@@ -65,7 +94,7 @@ size_t GeneticAlgorithm::step()
 	generations_per_step = std::max(1, generations_per_step);
 	max_generations = std::max(1, max_generations);
 
-	// If UI changed size, rebuild the GA state quickly
+	// If the population size changed live, we rebuild.
 	if ((int)population.size() != population_size)
 	{
 		reset();
@@ -90,10 +119,11 @@ size_t GeneticAlgorithm::step()
 		++generation;
 		++best_step;
 
+		// Sort: best objective first.
 		std::sort(population.begin(), population.end(),
 			[](const Individual& a, const Individual& b) { return a.objective < b.objective; });
 
-		// update best
+		// Update global best (best-so-far) from the current generation leader.
 		if (population.front().objective < best_individual.objective)
 		{
 			best_individual = population.front();
@@ -101,6 +131,7 @@ size_t GeneticAlgorithm::step()
 			best_solution.calculate_metrics(metrics);
 		}
 
+		// Stop criterion.
 		if ((int)generation >= max_generations)
 		{
 			finished = true;
@@ -110,11 +141,11 @@ size_t GeneticAlgorithm::step()
 		std::vector<Individual> next;
 		next.reserve(population_size);
 
-		// 1) elites survive
+		// 1) Elites survive unchanged.
 		for (int i = 0; i < elite_count; ++i)
 			next.push_back(population[i]);
 
-		// 2) offspring: elite x non-elite
+		// 2) Offspring generation via crossover + mutation.
 		for (int i = 0; i < offspring_count; ++i)
 		{
 			const Individual& elite = population[elite_pick(rng)];
@@ -136,7 +167,7 @@ size_t GeneticAlgorithm::step()
 			next.push_back(std::move(child));
 		}
 
-		// 3) mutants
+		// 3) Mutants: completely random individuals for diversity.
 		for (int i = 0; i < mutant_count; ++i)
 		{
 			Individual m = make_random_individual();
@@ -156,14 +187,24 @@ size_t GeneticAlgorithm::step()
 		population = std::move(next);
 	}
 
+	// "metrics.step" is the x-axis for the visualiser.
 	return ++metrics.step;
 }
 
+/**
+ * @brief Whether the algorithm is finished.
+ */
 bool GeneticAlgorithm::done()
 {
 	return finished;
 }
 
+/**
+ * @brief Return the best solution found so far.
+ *
+ * Note: this returns by value (copy). That's simple and matches the existing
+ * BeamSearch code pattern.
+ */
 Solution GeneticAlgorithm::get_current_solution()
 {
 	return best_solution;
@@ -171,6 +212,9 @@ Solution GeneticAlgorithm::get_current_solution()
 
 // -------- internals --------
 
+/**
+ * @brief Create the initial random population.
+ */
 void GeneticAlgorithm::initialise_population()
 {
 	population.reserve(population_size);
@@ -178,9 +222,14 @@ void GeneticAlgorithm::initialise_population()
 		population.push_back(make_random_individual());
 }
 
+/**
+ * @brief Create a brand new random individual.
+ *
+ * Both key arrays are filled with independent random floats in [0,1].
+ */
 GeneticAlgorithm::Individual GeneticAlgorithm::make_random_individual()
 {
-	const size_t n = request_count();
+	const size_t n = (size_t)instance->request_count;
 	std::uniform_real_distribution<float> U(0.0f, 1.0f);
 
 	Individual ind;
@@ -195,9 +244,19 @@ GeneticAlgorithm::Individual GeneticAlgorithm::make_random_individual()
 	return ind;
 }
 
+/**
+ * @brief Crossover (recombination) operator.
+ *
+ * We use a BRKGA-style biased uniform crossover:
+ * For each gene (i.e., each request index i):
+ *   - With probability elite_bias, copy the elite parent's key.
+ *   - Otherwise copy the other parent's key.
+ *
+ * This keeps the genome representation simple and works well with a decoder.
+ */
 GeneticAlgorithm::Individual GeneticAlgorithm::crossover(const Individual& elite_parent, const Individual& other_parent)
 {
-	const size_t n = request_count();
+	const size_t n = (size_t)instance->request_count;
 	std::uniform_real_distribution<float> U(0.0f, 1.0f);
 
 	Individual child;
@@ -212,9 +271,16 @@ GeneticAlgorithm::Individual GeneticAlgorithm::crossover(const Individual& elite
 	return child;
 }
 
+/**
+ * @brief Mutation operator.
+ *
+ * Mutation introduces randomness to avoid premature convergence.
+ * Here we pick @ref mutate_requests random request indices and apply a small
+ * gaussian perturbation to both keys, clamped to [0,1].
+ */
 void GeneticAlgorithm::mutate(Individual& ind)
 {
-	const size_t n = request_count();
+	const size_t n = (size_t)instance->request_count;
 	if (n == 0 || mutate_requests <= 0)
 		return;
 
@@ -234,20 +300,24 @@ void GeneticAlgorithm::mutate(Individual& ind)
 		ind.priority_key[i] = clamp01(ind.priority_key[i] + N(rng));
 		ind.select_key[i]   = clamp01(ind.select_key[i] + N(rng));
 	}
-}
+};
 
-size_t GeneticAlgorithm::request_count() const
-{
-	return instance ? instance->request_count : 0;
-}
-
+/**
+ * @brief Choose and order which requests this individual will attempt.
+ *
+ * This function is where we enforce the "serve at least min_requests" rule.
+ *
+ * Conceptually:
+ * - select_key controls the subset of served requests.
+ * - priority_key controls the order.
+ */
 std::vector<int> GeneticAlgorithm::build_selected_requests(const Individual& ind) const
 {
-	const int n = (int)request_count();
+	const int n = (int)instance->request_count;
 	std::vector<int> all(n);
 	std::iota(all.begin(), all.end(), 0);
 
-	// 1) preliminary selection by threshold
+	// 1) Select requests based on the threshold.
 	std::vector<int> selected;
 	selected.reserve(n);
 	for (int i = 0; i < n; ++i)
@@ -256,35 +326,52 @@ std::vector<int> GeneticAlgorithm::build_selected_requests(const Individual& ind
 			selected.push_back(i);
 	}
 
-	// 2) repair to ensure >= min_requests
+	// 2) Repair: ensure we have at least min_requests.
 	const int gamma = instance->min_requests;
 	if ((int)selected.size() < gamma)
 	{
+		// Sort all request indices by select_key so we add "most selected" first.
 		std::sort(all.begin(), all.end(),
 			[&](int a, int b) { return ind.select_key[a] < ind.select_key[b]; });
 
 		for (int id : all)
 		{
-			if ((int)selected.size() >= gamma) break;
+			if ((int)selected.size() >= gamma)
+				break;
 			if (std::find(selected.begin(), selected.end(), id) == selected.end())
 				selected.push_back(id);
 		}
 	}
 
-	// 3) order by priority key
+	// 3) Order the selected set by priority_key.
 	std::sort(selected.begin(), selected.end(),
 		[&](int a, int b) { return ind.priority_key[a] < ind.priority_key[b]; });
 
 	return selected;
 }
 
+/**
+ * @brief Decode genome -> Solution (phenotype).
+ *
+ * This decoder is *feasibility-oriented*:
+ * - It never interleaves requests.
+ * - It appends pickup then its matching dropoff immediately.
+ *
+ * Why? Because it is easy to reason about and guarantees:
+ * - pickup-before-dropoff
+ * - capacity is respected by checking before pickup
+ *
+ * Downside: it is restrictive, so it may miss good solutions.
+ */
 Solution GeneticAlgorithm::decode_to_solution(const Individual& ind) const
 {
-	// Baseline safe decoder:
-	// request i -> pickup = instance->pickups[i], dropoff = instance->dropoffs[i]
-	// append pickup then immediate dropoff (no interleaving).
-	// This always respects pickup-before-dropoff and capacity locally.
-
+	/**
+	 * Temporary minimal vehicle state used during decoding.
+	 *
+	 * We only need:
+	 * - the visited path (list of nodes)
+	 * - the current load
+	 */
 	struct TempDriver
 	{
 		int id = -1;
@@ -292,36 +379,43 @@ Solution GeneticAlgorithm::decode_to_solution(const Individual& ind) const
 		int load = 0;
 	};
 
+	// Create one TempDriver per vehicle.
 	std::vector<TempDriver> drivers;
 	drivers.reserve(instance->vehicle_count);
 	for (int k = 0; k < instance->vehicle_count; ++k)
 		drivers.push_back(TempDriver{ k });
 
+	// Determine which requests to serve and in what order.
 	const std::vector<int> selected = build_selected_requests(ind);
 
+	// Greedy assignment: for each request in order, put it on the first feasible vehicle.
 	for (int rid : selected)
 	{
 		Node* pickup = &instance->pickups[(size_t)rid];
 		Node* dropoff = &instance->dropoffs[(size_t)rid];
 
-		const int pickup_delta = pickup->capacity_change;   // > 0
-		const int dropoff_delta = dropoff->capacity_change; // < 0
+		const int pickup_delta = pickup->capacity_change;   // positive
+		const int dropoff_delta = dropoff->capacity_change; // negative
 
 		for (auto& d : drivers)
 		{
+			// Capacity check only needed at pickup.
 			if (d.load + pickup_delta > instance->vehicle_capacity)
 				continue;
 
+			// Visit pickup.
 			d.path.push_back(pickup);
 			d.load += pickup_delta;
 
+			// Immediately visit dropoff.
 			d.path.push_back(dropoff);
 			d.load += dropoff_delta;
 
-			break;
+			break; // request assigned
 		}
 	}
 
+	// Convert TempDrivers into a real Solution (one Route per vehicle).
 	Solution sol(instance);
 	sol.routes.reserve((size_t)instance->vehicle_count);
 
@@ -337,6 +431,11 @@ Solution GeneticAlgorithm::decode_to_solution(const Individual& ind) const
 	return sol;
 }
 
+/**
+ * @brief ImGui parameter controls.
+ *
+ * This lets you tune GA behaviour at runtime.
+ */
 void GeneticAlgorithm::draw()
 {
 #ifndef SCFPDP_HEADLESS
@@ -351,5 +450,9 @@ void GeneticAlgorithm::draw()
 	ImGui::SliderFloat("Select Threshold", &select_threshold, 0.05f, 0.95f);
 	ImGui::SliderInt("Mutate Requests", &mutate_requests, 0, 20);
 	ImGui::SliderFloat("Mutate Sigma", &mutate_sigma, 0.01f, 0.50f);
+
+	ImGui::Separator();
+	ImGui::Text("Generation: %zu", generation);
+	ImGui::Text("Best objective: %.2f", best_individual.objective);
 #endif // SCFPDP_HEADLESS
 }
