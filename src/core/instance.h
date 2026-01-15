@@ -22,7 +22,7 @@ struct Instance
 	int vehicle_count;
 	int vehicle_capacity;
 	int min_requests;
-	float fairness;
+	float fairness; // fairness weight ("roh")
 
 	Location depot;
 	std::span<CustomerRequest> requests;
