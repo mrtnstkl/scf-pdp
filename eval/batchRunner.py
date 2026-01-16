@@ -54,7 +54,14 @@ ALGORITHMS = {
         "params": {
             "candidates": ("int", 5),
             "tightening": ("float", 0.5),
-            "neighborhood": ("str", "swap"),
+            "neighborhood": (
+                "enum",
+                [
+                    ("0", "MOVE_REQUEST_TO_ANOTHER_ROUTE"),
+                    ("1", "SWAP_REQUESTS_BETWEEN_ROUTES"),
+                    ("2", "MOVE_REQUEST_WITHIN_ROUTE"),
+                ],
+            ),
             "strategy": ("enum", ["first", "best"]),
             "stagnation": ("int", 100),
         },
@@ -63,7 +70,7 @@ ALGORITHMS = {
             inst,
             str(p["candidates"]),
             str(p["tightening"]),
-            p["neighborhood"],
+            p["neighborhood"],   # already "0", "1" or "2"
             p["strategy"],
             str(p["stagnation"]),
         ],
@@ -78,6 +85,24 @@ ALGORITHMS = {
             inst,
             str(p["stagnation"]),
             str(p["reaction"]),
+        ],
+    },
+    "genetic": {
+    "params": {
+        "population_size": ("int", 100),
+        "elite_fraction": ("float", 0.1),
+        "mutant_fraction": ("float", 0.2),
+        "elite_bias": ("float", 0.7),
+        "max_generations": ("int", 1000),
+    },
+        "builder": lambda inst, p: [
+            "genetic",
+            inst,
+            str(p["population_size"]),
+            str(p["elite_fraction"]),
+            str(p["mutant_fraction"]),
+            str(p["elite_bias"]),
+            str(p["max_generations"]),
         ],
     },
 }
@@ -253,11 +278,38 @@ class SCFPDPGui(tk.Tk):
             ttk.Label(self.params_frame, text=name).pack(anchor="w")
 
             if ptype == "enum":
-                var = tk.StringVar(value=default[0])
-                ttk.OptionMenu(self.params_frame, var, default[0], *default).pack(fill="x")
+                var = tk.StringVar()
+
+                # enum with (value, label)
+                if isinstance(default, list) and default and isinstance(default[0], tuple):
+                    values = [v for v, _ in default]
+                    labels = {v: lbl for v, lbl in default}
+
+                    var.set(values[0])
+
+                    option = ttk.OptionMenu(
+                        self.params_frame,
+                        var,
+                        values[0],
+                        *values,
+                    )
+                    option.pack(fill="x")
+
+                # enum with plain values
+                else:
+                    var.set(default[0])
+                    ttk.OptionMenu(
+                        self.params_frame,
+                        var,
+                        default[0],
+                        *default,
+                    ).pack(fill="x")
+
             else:
                 var = tk.StringVar(value=str(default))
                 ttk.Entry(self.params_frame, textvariable=var).pack(fill="x")
+
+
 
             self.param_widgets[name] = (ptype, var)
 

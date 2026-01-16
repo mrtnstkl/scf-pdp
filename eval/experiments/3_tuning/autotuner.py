@@ -1,13 +1,17 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-initialise μ parents randomly
+(mu + lambda)-ES style tuning
+
+initialise mu parents randomly
 evaluate each parent (k repeats)
 
 repeat G generations:
-    generate λ children via Gaussian mutation
+    generate lambda children via Gaussian mutation
     evaluate children
-    select μ best from parents ∪ children
+I
+    select mu best from parents union children
     adapt mutation strength
-
 """
 
 import random
@@ -15,7 +19,7 @@ import subprocess
 from pathlib import Path
 import csv
 import statistics
-from tqdm import tqdm
+from multiprocessing import Pool
 
 # =========================
 # GLOBAL CONFIG
@@ -24,18 +28,20 @@ from tqdm import tqdm
 SEED = 7901
 random.seed(SEED)
 
-BASE_DIR = Path(__file__).resolve().parents[3]
-SCFPDP_EXE = BASE_DIR / "build" / "release" / "scfpdp.exe"
+BASE_DIR = Path.cwd()
+SCFPDP_EXE = BASE_DIR / "scfpdp"   # binary next to this script
 
-ALGO = "lns"          # "lns" or "genetic"
-TUNING_MODE = 1       # 0 = random, 1 = adaptive
+ALGO = "genetic"          # "lns" or "genetic"
+TUNING_MODE = 1           # 0 = random, 1 = adaptive (currently unused)
 TIMEOUT_SEC = 300
 REPEATS = 3
-ITERATIONS = 30
+
+MAX_GENERATIONS = 2000
+MAX_WORKERS = 96
 
 SIZES = [50,100,200,500,1000]
 INSTANCE_BASE = BASE_DIR / "instances"
-OUTPUT_BASE = BASE_DIR / "eval" / "experiments" / "3_tuning"
+OUTPUT_BASE = BASE_DIR / "results" / f"autotune_{ALGO}_mode{TUNING_MODE}"
 
 # =========================
 # PARAMETER RANGES
@@ -47,22 +53,33 @@ LNS_RANGES = {
 }
 
 GENETIC_RANGES = {
-    "population": (20, 200),
-    "elite_frac": (0.05, 0.3),
-    "mutant_frac": (0.05, 0.5),
-    "elite_bias": (0.5, 2.0),
-    "generations": (50, 500),
+    "population": (300, 500),
+    "elite_frac": (0.05, 0.4),
+    "mutant_frac": (0.1, 0.5),
+    "elite_bias": (0.4, 1.5),
 }
+
+# =========================
+# PROGRESS
+# =========================
+
+class Progress:
+    def __init__(self, total: int, every: int = 50):
+        self.total = total
+        self.every = every
+        self.done = 0
+
+    def update(self, n: int = 1):
+        self.done += n
+        if self.done % self.every == 0 or self.done == self.total:
+            print(f"[progress] {self.done}/{self.total}", flush=True)
 
 # =========================
 # UTILITIES
 # =========================
 
-def normalise(params, ranges):
-    return {
-        k: (params[k] - lo) / (hi - lo)
-        for k, (lo, hi) in ranges.items()
-    }
+def random_individual(ranges):
+    return {k: random.random() for k in ranges}
 
 def denormalise(vec, ranges):
     out = {}
@@ -71,35 +88,11 @@ def denormalise(vec, ranges):
         out[k] = int(val) if isinstance(lo, int) else round(val, 3)
     return out
 
-def random_individual(ranges):
-    return {k: random.random() for k in ranges}
-
-
 def mutate(ind, sigma):
     return {
         k: min(1.0, max(0.0, v + random.gauss(0, sigma)))
         for k, v in ind.items()
     }
-
-def sample_params(ranges):
-    params = {}
-    for k, (lo, hi) in ranges.items():
-        if isinstance(lo, int):
-            params[k] = random.randint(lo, hi)
-        else:
-            params[k] = round(random.uniform(lo, hi), 3)
-    return params
-
-
-def perturb(params, ranges, strength=0.2):
-    new = params.copy()
-    for k, (lo, hi) in ranges.items():
-        span = hi - lo
-        delta = random.uniform(-strength, strength) * span
-        val = max(lo, min(hi, new[k] + delta))
-        new[k] = int(val) if isinstance(lo, int) else round(val, 3)
-    return new
-
 
 def run_instance(instance, params, out_file=None):
     if ALGO == "lns":
@@ -110,9 +103,11 @@ def run_instance(instance, params, out_file=None):
     else:
         cmd = [
             str(SCFPDP_EXE), "genetic", str(instance),
-            str(params["population"]), str(params["elite_frac"]),
-            str(params["mutant_frac"]), str(params["elite_bias"]),
-            str(params["generations"])
+            str(params["population"]),
+            str(params["elite_frac"]),
+            str(params["mutant_frac"]),
+            str(params["elite_bias"]),
+            str(MAX_GENERATIONS)
         ]
 
     if out_file is not None:
@@ -122,8 +117,9 @@ def run_instance(instance, params, out_file=None):
         result = subprocess.run(
             cmd,
             timeout=TIMEOUT_SEC,
-            capture_output=True,
-            text=True
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True
         )
     except subprocess.TimeoutExpired:
         return None
@@ -140,40 +136,23 @@ def run_instance(instance, params, out_file=None):
 
     return None
 
+def _eval_one(args):
+    inst, params = args
+    return run_instance(inst, params)
 
-def evaluate_config(instances, params, pbar, cutoff=None, min_samples=5):
-    costs = []
-
-    for inst in instances:
-        for _ in range(REPEATS):
-            cost = run_instance(inst, params)
-            pbar.update(1)
-
-            if cost is not None:
-                costs.append(cost)
-
-            if (
-                cutoff is not None
-                and len(costs) >= min_samples
-                and statistics.mean(costs) > cutoff
-            ):
-                return float("inf")
-
-    return statistics.mean(costs) if costs else float("inf")
-
-def evaluate(ind, instances, pbar, ranges):
+def evaluate(ind, instances, progress, ranges):
     params = denormalise(ind, ranges)
-    costs = []
+    tasks = [(inst, params) for inst in instances for _ in range(REPEATS)]
 
-    for inst in instances:
-        for _ in range(REPEATS):
-            c = run_instance(inst, params)
-            pbar.update(1)
+    costs = []
+    with Pool(processes=MAX_WORKERS) as pool:
+        for c in pool.imap_unordered(_eval_one, tasks):
+            if progress is not None:
+                progress.update(1)
             if c is not None:
                 costs.append(c)
 
     return statistics.mean(costs) if costs else float("inf")
-
 
 # =========================
 # TUNING PER SIZE
@@ -183,6 +162,7 @@ def tune_for_size(size):
     instance_dir = INSTANCE_BASE / str(size) / "train"
     instances = sorted(instance_dir.glob("*.txt"))
     if not instances:
+        print(f"[size {size}] no instances found at {instance_dir}", flush=True)
         return
 
     ranges = LNS_RANGES if ALGO == "lns" else GENETIC_RANGES
@@ -196,40 +176,32 @@ def tune_for_size(size):
     scores = {}
 
     total_evals = (MU + GENERATIONS * LAMBDA) * len(instances) * REPEATS
+    progress = Progress(total=total_evals, every=50)
 
-    with tqdm(total=total_evals, desc=f"Tuning size {size}") as pbar:
+    for ind in population:
+        scores[id(ind)] = evaluate(ind, instances, progress, ranges)
 
-        for ind in population:
-            scores[id(ind)] = evaluate(ind, instances, pbar, ranges)
+    for gen in range(GENERATIONS):
+        offspring = [mutate(random.choice(population), SIGMA)
+                     for _ in range(LAMBDA)]
 
-        for gen in range(GENERATIONS):
-            offspring = [mutate(random.choice(population), SIGMA)
-                         for _ in range(LAMBDA)]
+        for ind in offspring:
+            scores[id(ind)] = evaluate(ind, instances, progress, ranges)
 
-            for ind in offspring:
-                scores[id(ind)] = evaluate(ind, instances, pbar, ranges)
+        combined = population + offspring
+        combined.sort(key=lambda ind: scores[id(ind)])
+        population = combined[:MU]
 
-            combined = population + offspring
-            combined.sort(key=lambda ind: scores[id(ind)])
-            population = combined[:MU]
-
-            SIGMA *= 0.9  # mild annealing
-
-            tqdm.write(
-                f"[size {size}] gen {gen}: best={scores[id(population[0])]:.2f}"
-            )
+        SIGMA *= 0.9
+        print(f"[size {size}] gen {gen}: best={scores[id(population[0])]:.2f}", flush=True)
 
     best = population[0]
     best_params = denormalise(best, ranges)
     best_score = scores[id(best)]
 
-    print(f"\n[size {size}] BEST CONFIG:")
-    print(best_params)
-    print(f"Average cost: {best_score:.2f}")
-
-    # =====================
-    # WRITE REPORT
-    # =====================
+    print(f"\n[size {size}] BEST CONFIG:", flush=True)
+    print(best_params, flush=True)
+    print(f"Average cost: {best_score:.2f}", flush=True)
 
     out_dir = OUTPUT_BASE / str(size)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -238,18 +210,8 @@ def tune_for_size(size):
     with report_file.open("w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["rank", "avg_cost", "params"])
-
         for rank, ind in enumerate(population):
-            writer.writerow([
-                rank,
-                scores[id(ind)],
-                denormalise(ind, ranges)
-            ])
-
-
-    # =====================
-    # RE-RUN BEST & SAVE SOLUTIONS
-    # =====================
+            writer.writerow([rank, scores[id(ind)], denormalise(ind, ranges)])
 
     sol_dir = out_dir / "best_solutions"
     sol_dir.mkdir(exist_ok=True)
@@ -257,11 +219,6 @@ def tune_for_size(size):
     for inst in instances:
         out_file = sol_dir / f"{inst.stem}.txt"
         run_instance(inst, best_params, out_file=out_file)
-
-    print(f"\n[size {size}] BEST CONFIG:")
-    print(best_params)
-    print(f"Average cost: {best_score:.2f}")
-
 
 # =========================
 # ENTRY POINT
