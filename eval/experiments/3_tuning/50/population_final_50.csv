@@ -1,0 +1,4 @@
+rank,avg_cost,params
+0,1709.0152222222223,"{'stagnation': 500, 'reaction': 0.377}"
+1,1711.5068888888889,"{'stagnation': 500, 'reaction': 0.343}"
+2,1715.7707777777778,"{'stagnation': 500, 'reaction': 0.21}"
