@@ -35,7 +35,7 @@
  */
 
 
-#pragma once
+ #pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -127,6 +127,7 @@ struct GeneticAlgorithm : public Algorithm
 	 * You can tweak these live in ImGui via draw().
 	 */
 	///@{
+	int seed = 0;
 	int population_size = 120;        ///< Number of individuals per generation.
 	float elite_fraction = 0.20f;     ///< Fraction of population copied unchanged.
 	float mutant_fraction = 0.10f;    ///< Fraction replaced by completely random individuals.
@@ -207,20 +208,41 @@ private:
 
 	// decoding & eval
 	/**
-	 * @brief Decode an individual's genome into a concrete Solution.
+	 * @brief Decode a genome (random keys) into a concrete Solution.
 	 *
-	 * This is the key idea of random-key GAs:
-	 * - Crossover and mutation operate on simple floats.
-	 * - The decoder is responsible for producing a valid-ish Solution.
+	 * This is the "phenotype construction" step of the GA: the Individual only
+	 * stores keys in [0,1], and this function turns them into actual vehicle
+	 * routes.
 	 *
-	 * Baseline decoder behaviour:
-	 * - Choose a set of requests (using select_key + repair)
-	 * - Order them (using priority_key)
-	 * - For each request, assign it to the first vehicle that can take the pickup
-	 *   without exceeding capacity.
-	 * - Append pickup then immediate dropoff.
+	 * High-level behaviour:
+	 * 1) Build an ordered list of request IDs to serve via build_selected_requests().
+	 * 2) Assign each request to a vehicle (round-robin) and append its pickup.
+	 * 3) Maintain a per-vehicle list of pending dropoffs (pickups done, dropoff not yet).
+	 * 4) Whenever capacity would be exceeded by the next pickup, greedily perform
+	 *    one of the pending dropoffs first.
+	 * 5) After all pickups are placed, greedily perform the remaining pending dropoffs.
+	 *
+	 * Greedy choice rule (dropoffs):
+	 * The algorithm chooses the next dropoff that minimises *incremental travel cost*
+	 * according to DeltaCalculator:
+	 * - While trying to fit a pickup: minimise the cost of inserting
+	 *     (prev -> dropoff -> pickup)
+	 * - At the end (no next pickup): minimise the cost of inserting
+	 *     (prev -> dropoff)
+	 *
+	 * Feasibility guarantees:
+	 * - Pickup-before-dropoff is guaranteed because a dropoff is only inserted after
+	 *   its pickup has been added to the route (i.e., it is in pending_dropoffs).
+	 * - Capacity is controlled by inserting dropoffs until the next pickup fits.
+	 *
+	 * Limitations (intentional for a baseline):
+	 * - Vehicle assignment is round-robin, not cost-based.
+	 * - Dropoffs are only appended at the end of the current path (no insertion into
+	 *   earlier positions).
+	 * - If a pickup's capacity_change alone exceeds vehicle_capacity, no solution exists
+	 *   for that pickup; the current implementation assumes this does not happen.
 	 */
-	Solution decode_to_solution(const Individual& ind) const;
+	Solution decode_to_solution(const Individual& ind);
 
 	// helpers
 

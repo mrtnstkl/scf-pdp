@@ -1,8 +1,11 @@
 #include "heuristics/geneticalgorithm.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <numeric>
+#include <random>
+#include <vector>
 
 #ifndef SCFPDP_HEADLESS
 #include "imgui.h"
@@ -15,13 +18,6 @@ GeneticAlgorithm::GeneticAlgorithm(Instance* instance)
 	: instance(instance)
 	, best_solution(instance) // Solution has no default ctor
 {
-	//std::seed_seq seq{
-	//	(uint32_t)instance->vehicle_count,
-	//	(uint32_t)instance->min_requests,
-	//	(uint32_t)instance->vehicle_capacity,
-	//	(uint32_t)instance->request_count
-	//};
-	//rng.seed(seq);
 	rng.seed(std::random_device{}());
 	reset();
 }
@@ -34,6 +30,9 @@ GeneticAlgorithm::GeneticAlgorithm(Instance* instance)
  */
 void GeneticAlgorithm::reset()
 {
+	if (seed != 0)
+		rng.seed(seed);
+
 	finished = false;
 	generation = 0;
 	best_step = 0;
@@ -300,7 +299,7 @@ void GeneticAlgorithm::mutate(Individual& ind)
 		ind.priority_key[i] = clamp01(ind.priority_key[i] + N(rng));
 		ind.select_key[i]   = clamp01(ind.select_key[i] + N(rng));
 	}
-};
+}
 
 /**
  * @brief Choose and order which requests this individual will attempt.
@@ -350,20 +349,7 @@ std::vector<int> GeneticAlgorithm::build_selected_requests(const Individual& ind
 	return selected;
 }
 
-/**
- * @brief Decode genome -> Solution (phenotype).
- *
- * This decoder is *feasibility-oriented*:
- * - It never interleaves requests.
- * - It appends pickup then its matching dropoff immediately.
- *
- * Why? Because it is easy to reason about and guarantees:
- * - pickup-before-dropoff
- * - capacity is respected by checking before pickup
- *
- * Downside: it is restrictive, so it may miss good solutions.
- */
-Solution GeneticAlgorithm::decode_to_solution(const Individual& ind) const
+Solution GeneticAlgorithm::decode_to_solution(const Individual& ind)
 {
 	/**
 	 * Temporary minimal vehicle state used during decoding.
@@ -377,41 +363,98 @@ Solution GeneticAlgorithm::decode_to_solution(const Individual& ind) const
 		int id = -1;
 		std::vector<Node*> path;
 		int load = 0;
+		std::vector<Node*> pending_dropoffs;
+		DeltaCalculator delta;
 	};
 
 	// Create one TempDriver per vehicle.
 	std::vector<TempDriver> drivers;
 	drivers.reserve(instance->vehicle_count);
 	for (int k = 0; k < instance->vehicle_count; ++k)
-		drivers.push_back(TempDriver{ k });
+		drivers.push_back(TempDriver{ k, {}, 0, {}, DeltaCalculator(instance) });
 
 	// Determine which requests to serve and in what order.
 	const std::vector<int> selected = build_selected_requests(ind);
 
-	// Greedy assignment: for each request in order, put it on the first feasible vehicle.
+	// Assign requests to vehicles in round-robin order.
 	for (int rid : selected)
 	{
+		assert(rid >= 0 && rid < instance->request_count);
+
 		Node* pickup = &instance->pickups[(size_t)rid];
 		Node* dropoff = &instance->dropoffs[(size_t)rid];
 
-		const int pickup_delta = pickup->capacity_change;   // positive
-		const int dropoff_delta = dropoff->capacity_change; // negative
+		// Pick a driver using round-robin
+		auto& driver = drivers[rid % drivers.size()];
 
-		for (auto& d : drivers)
+		// Perform dropoffs until we can fit the pickup
+		while (driver.load + pickup->capacity_change > instance->vehicle_capacity)
 		{
-			// Capacity check only needed at pickup.
-			if (d.load + pickup_delta > instance->vehicle_capacity)
-				continue;
+			std::vector<Node *>::iterator best_dropoff;
+			float best_cost = std::numeric_limits<float>::infinity();
+			// find the best dropoff to perform now
+			for (auto pending_dropoff = driver.pending_dropoffs.begin(); pending_dropoff != driver.pending_dropoffs.end(); ++pending_dropoff)
+			{
+				// simulate adding the dropoff
+				Node* prev = driver.path.empty() ? nullptr : driver.path.back();
 
-			// Visit pickup.
-			d.path.push_back(pickup);
-			d.load += pickup_delta;
+				DeltaCalculator::Change changes[] = {
+					// first add the dropoff
+					driver.delta.simulate_add(driver.id, prev, *pending_dropoff),
+					// then the pickup that we want to insert
+					driver.delta.simulate_add(driver.id, *pending_dropoff, pickup),
+				};
+				const float cost = driver.delta.cost(std::span(changes, 2));
+				if (cost < best_cost)
+				{
+					best_cost = cost;
+					best_dropoff = pending_dropoff;
+				}
+			}
+			// apply the best dropoff found
+			driver.delta.add_stop(driver.id, driver.path.empty() ? nullptr : driver.path.back(), *best_dropoff);
+			driver.path.push_back(*best_dropoff);
+			driver.load += (*best_dropoff)->capacity_change;
+			// remove from pending dropoffs via swap-and-pop
+			std::swap(*best_dropoff, driver.pending_dropoffs.back());
+			driver.pending_dropoffs.pop_back();
+		}
 
-			// Immediately visit dropoff.
-			d.path.push_back(dropoff);
-			d.load += dropoff_delta;
+		// Insert pickup
+		driver.delta.add_stop(driver.id, driver.path.empty() ? nullptr : driver.path.back(), pickup);
+		driver.path.push_back(pickup);
+		driver.pending_dropoffs.push_back(dropoff);
+		driver.load += pickup->capacity_change;
+	}
 
-			break; // request assigned
+	// After all requests are assigned, perform any remaining pending dropoffs.
+	for (auto& driver : drivers)
+	{
+		while (!driver.pending_dropoffs.empty())
+		{
+			std::vector<Node*>::iterator best_dropoff;
+			float best_cost = std::numeric_limits<float>::infinity();
+			// find the best dropoff to perform now
+			for (auto pending_dropoff = driver.pending_dropoffs.begin(); pending_dropoff != driver.pending_dropoffs.end(); ++pending_dropoff)
+			{
+				// simulate adding the dropoff
+				Node* prev = driver.path.empty() ? nullptr : driver.path.back();
+
+				DeltaCalculator::Change change = driver.delta.simulate_add(driver.id, prev, *pending_dropoff);
+				const float cost = driver.delta.cost(std::span(&change, 1));
+				if (cost < best_cost)
+				{
+					best_cost = cost;
+					best_dropoff = pending_dropoff;
+				}
+			}
+			// apply the best dropoff found
+			driver.delta.add_stop(driver.id, driver.path.empty() ? nullptr : driver.path.back(), *best_dropoff);
+			driver.path.push_back(*best_dropoff);
+			driver.load += (*best_dropoff)->capacity_change;
+			// remove from pending dropoffs via swap-and-pop
+			std::swap(*best_dropoff, driver.pending_dropoffs.back());
+			driver.pending_dropoffs.pop_back();
 		}
 	}
 
@@ -439,13 +482,16 @@ Solution GeneticAlgorithm::decode_to_solution(const Individual& ind) const
 void GeneticAlgorithm::draw()
 {
 #ifndef SCFPDP_HEADLESS
+
+	ImGui::InputInt("Seed (0 = random)", &seed);
+
 	ImGui::SliderInt("Population", &population_size, 20, 600);
 	ImGui::SliderFloat("Elite Fraction", &elite_fraction, 0.05f, 0.50f);
 	ImGui::SliderFloat("Mutant Fraction", &mutant_fraction, 0.00f, 0.50f);
 	ImGui::SliderFloat("Elite Bias", &elite_bias, 0.50f, 0.95f);
 
 	ImGui::SliderInt("Generations/Step", &generations_per_step, 1, 100);
-	ImGui::SliderInt("Max Generations", &max_generations, 50, 200000);
+	ImGui::SliderInt("Max Generations", &max_generations, 50, 20000);
 
 	ImGui::SliderFloat("Select Threshold", &select_threshold, 0.05f, 0.95f);
 	ImGui::SliderInt("Mutate Requests", &mutate_requests, 0, 20);
