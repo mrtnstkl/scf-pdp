@@ -1,8 +1,9 @@
 #pragma once
 
-#include <vector>
 #include <list>
 #include <ostream>
+#include <span>
+#include <vector>
 
 #include "util/canvas.h"
 #include "util/gui.h"
@@ -85,6 +86,18 @@ struct Solution
 
 struct DeltaCalculator
 {
+	struct Change
+	{
+		int64_t route_sum_change;
+		size_t route;
+		int64_t route_distance_change;
+	};
+
+private:
+	void apply_change(const Change& change);
+	void revert_change(const Change& change);
+
+public:
 	Instance* instance;
 	// sum of all route distances
 	uint64_t route_sum;
@@ -115,6 +128,25 @@ struct DeltaCalculator
 	 */
 	void add_stop(int route_id, const Node* prev_node, const Node* new_node, const Node* next_node);
 	/**
+	 * @brief Simulate adding a stop to the end of the route
+	 * 
+	 * @param route_id 
+	 * @param prev_node the node before the new node, or nullptr if inserting at start
+	 * @param new_node the new node to insert
+	 * @return Change The change that would be applied
+	 */
+	Change simulate_add(int route_id, const Node* prev_node, const Node* new_node) const;
+	/**
+	 * @brief Simulate adding a stop between two nodes
+	 * 
+	 * @param route_id 
+	 * @param prev_node the node before the new node, or nullptr if inserting at start
+	 * @param new_node the new node to insert
+	 * @param next_node the node after the new node
+	 * @return Change The change that would be applied
+	 */
+	Change simulate_add(int route_id, const Node* prev_node, const Node* new_node, const Node* next_node) const;
+	/**
 	 * @brief Remove a stop from the end of the route
 	 * 
 	 * @param route_id 
@@ -144,10 +176,20 @@ struct DeltaCalculator
 	float fairness() const;
 	float cost() const;
 	float cost(float fairness) const;
+	/**
+	 * @brief Calculate the cost after applying a series of changes
+	 * 
+	 * @param changes the changes to apply
+	 * @return float the resulting cost
+	 */
+	float cost(std::span<Change> changes);
 	std::pair<float, float> cost_with_fairness() const;
 
 	template<typename Container>
 	void add_stop(int route_id, Container& container, Container::iterator position, const Node* new_node);
+
+	template<typename Container>
+	Change simulate_add(int route_id, Container& container, Container::iterator position, const Node* new_node) const;
 
 	template<typename Container>
 	void remove_stop(int route_id, Container& container, Container::iterator position);
@@ -167,6 +209,23 @@ inline void DeltaCalculator::add_stop(int route_id, Container& container,
 		const Node* prev_node = (position == container.begin()) ? nullptr : *(std::prev(position));
 		const Node* next_node = *position;
 		add_stop(route_id, prev_node, new_node, next_node);
+	}
+}
+
+template <typename Container>
+inline DeltaCalculator::Change DeltaCalculator::simulate_add(
+	int route_id, Container& container, Container::iterator position, const Node* new_node) const
+{
+	if (position == container.end())
+	{
+		const Node* prev_node = container.empty() ? nullptr : *(std::prev(position));
+		return simulate_add(route_id, prev_node, new_node);
+	}
+	else
+	{
+		const Node* prev_node = (position == container.begin()) ? nullptr : *(std::prev(position));
+		const Node* next_node = *position;
+		return simulate_add(route_id, prev_node, new_node, next_node);
 	}
 }
 

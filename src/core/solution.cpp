@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <numeric>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -280,8 +281,19 @@ Solution Solution::load_from_file(const char* path, Instance* instance)
 		sol.routes.push_back(std::move(route));
 	}
 	return sol;
- }
+}
 
+void DeltaCalculator::apply_change(const Change& change)
+{
+	route_sum += change.route_sum_change;
+	route_distances[change.route] += change.route_distance_change;
+}
+
+void DeltaCalculator::revert_change(const Change& change)
+{
+	route_sum -= change.route_sum_change;
+	route_distances[change.route] -= change.route_distance_change;
+}
 
 DeltaCalculator::DeltaCalculator(Instance* instance)
 	: instance(instance), route_sum(0), route_distances(instance->vehicle_count, 0)
@@ -395,6 +407,90 @@ void DeltaCalculator::add_stop(int route_id, const Node* prev_node, const Node* 
 	route_distances[route_id] += d_next;
 	route_distances[route_id] -= d_prev_next;
 #endif
+}
+
+DeltaCalculator::Change DeltaCalculator::simulate_add(int route_id, const Node* prev_node, const Node* new_node) const
+{
+	Change change{};
+	change.route = route_id;
+
+	if (prev_node == nullptr)
+	{
+		// this is the first stop of the route, so use depot distance (twice)
+		const auto d_depot = instance->get_distance(new_node);
+		change.route_sum_change = d_depot + d_depot;
+#if FAIRNESS_MEASURE == 0
+		change.route_distance_change = d_depot * d_depot + d_depot * d_depot;
+#else
+		change.route_distance_change = d_depot + d_depot;
+#endif
+		return change;
+	}
+
+	// we are inserting at the end, so we:
+	// 1. add our own depot distance
+	const auto d_depot_new = instance->get_distance(new_node);
+	change.route_sum_change += d_depot_new;
+	// 2. subtract the old depot distance
+	const auto d_depot_old = instance->get_distance(prev_node);
+	change.route_sum_change -= d_depot_old;
+	// 3. add the distance to the previous node
+	const auto d_prev = instance->get_distance(prev_node, new_node);
+	change.route_sum_change += d_prev;
+#if FAIRNESS_MEASURE == 0
+	// when using Jain Fairness, we use squares of distances
+	change.route_distance_change += d_depot_new * d_depot_new;
+	change.route_distance_change -= d_depot_old * d_depot_old;
+	change.route_distance_change += d_prev * d_prev;
+#else
+	// otherwise, we use simple distances
+	change.route_distance_change += d_depot_new;
+	change.route_distance_change -= d_depot_old;
+	change.route_distance_change += d_prev;
+#endif
+	return change;
+}
+
+DeltaCalculator::Change DeltaCalculator::simulate_add(int route_id, const Node* prev_node, const Node* new_node, const Node* next_node) const
+{
+	Change change{};
+	change.route = route_id;
+
+	if (next_node == nullptr)
+	{
+		change = simulate_add(route_id, prev_node, new_node);
+		return change;
+	}
+	if (prev_node == nullptr)
+	{
+		// we are adding something at the beginning
+		// this is equivalent to adding to the end, we just use next in place of prev
+		change = simulate_add(route_id, next_node, new_node);
+		return change;
+	}
+
+	// we are inserting between two nodes, so we:
+	// 1. add the distance to the first
+	const auto d_prev = instance->get_distance(new_node, prev_node);
+	change.route_sum_change += d_prev;
+	// 2. add the distance to the second
+	const auto d_next = instance->get_distance(new_node, next_node);
+	change.route_sum_change += d_next;
+	// 3. remove the distance between the two
+	const auto d_prev_next = instance->get_distance(prev_node, next_node);
+	change.route_sum_change -= d_prev_next;
+#if FAIRNESS_MEASURE == 0
+	// when using Jain Fairness, we use squares of distances
+	change.route_distance_change += d_prev * d_prev;
+	change.route_distance_change += d_next * d_next;
+	change.route_distance_change -= d_prev_next * d_prev_next;
+#else
+	// otherwise, we use simple distances
+	change.route_distance_change += d_prev;
+	change.route_distance_change += d_next;
+	change.route_distance_change -= d_prev_next;
+#endif
+	return change;
 }
 
 void DeltaCalculator::remove_stop(int route_id, const Node* prev_node, const Node* old_node)
@@ -558,6 +654,16 @@ float DeltaCalculator::cost() const
 float DeltaCalculator::cost(float fairness) const
 {
 	return route_sum + instance->fairness * (1.f - fairness);
+}
+
+float DeltaCalculator::cost(std::span<DeltaCalculator::Change> changes)
+{
+	for (const auto& change : changes)
+		apply_change(change);
+	const float c = cost();
+	for (const auto& change : changes)
+		revert_change(change);
+	return c;
 }
 
 std::pair<float, float> DeltaCalculator::cost_with_fairness() const
