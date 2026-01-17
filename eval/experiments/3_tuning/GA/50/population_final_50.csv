@@ -1,0 +1,4 @@
+rank,avg_cost,params
+0,1450.6457777777778,"{'population': 300, 'elite_frac': 0.344, 'mutant_frac': 0.115, 'elite_bias': 0.4}"
+1,1453.057,"{'population': 305, 'elite_frac': 0.344, 'mutant_frac': 0.119, 'elite_bias': 0.443}"
+2,1454.9913333333334,"{'population': 304, 'elite_frac': 0.398, 'mutant_frac': 0.128, 'elite_bias': 0.4}"
