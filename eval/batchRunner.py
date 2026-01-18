@@ -3,12 +3,14 @@ import time
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 # =========================
 # ALGORITHM DEFINITIONS
 # =========================
 
+MAX_PARALLEL = 6
 ALGORITHMS = {
     "greedy": {
         "params": {},
@@ -352,19 +354,27 @@ class SCFPDPGui(tk.Tk):
         except Exception as e:
             messagebox.showerror("Error", str(e))
             return
-
+        
         results = []
-        for size, inst in instances:
-            res = run_instance(
-                exe=exe,
-                algorithm=self.algo_var.get(),
-                params=params,
-                instance=inst,
-                size=size,
-                timeout_sec=self.timeout_var.get(),
-                output_root=output_root,
-            )
-            results.append(res)
+
+        with ThreadPoolExecutor(MAX_PARALLEL) as executor:
+            futures = [
+                executor.submit(
+                    run_instance,
+                    exe,
+                    self.algo_var.get(),
+                    params,
+                    inst,
+                    size,
+                    self.timeout_var.get(),
+                    output_root,
+                )
+                for size, inst in instances
+            ]
+
+            for f in as_completed(futures):
+                results.append(f.result())
+
 
         messagebox.showinfo(
             "Done",

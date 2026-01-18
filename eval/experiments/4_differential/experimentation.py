@@ -1,28 +1,10 @@
-"""
-Q4 / Q5 Analysis Script (Python) — Batch Evaluation with Two Algorithm Paths
-
-Assumptions:
-- You have TWO base directories, one per algorithm
-- Inside each base directory are subfolders per instance size
-- Inside each size folder are plain .txt solution files
-
-Example layout:
-
-results_GA/
-  n50/*.txt
-  n100/*.txt
-
-results_GRASP/
-  n50/*.txt
-  n100/*.txt
-"""
-
 import glob
 import os
 import pandas as pd
 import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 # --------------------------------------------------
 # 1. Load a single solution file
@@ -57,19 +39,27 @@ def load_solution(path: str, algorithm: str, size_label: str) -> dict:
 # --------------------------------------------------
 
 # PATHS
-PATH_GA = "results/"
-PATH_GRASP = "results_GRASP"
+SCRIPT_DIR = Path(__file__).resolve().parent
+
+PATH_GA = SCRIPT_DIR / "results" / "ga"
+PATH_GRASP = SCRIPT_DIR / "results" / "grasp"
 
 rows = []
 
 for algo, base_path in [("GA", PATH_GA), ("GRASP", PATH_GRASP)]:
-    for size_dir in sorted(os.listdir(base_path)):
-        size_path = os.path.join(base_path, size_dir)
-        if not os.path.isdir(size_path):
+    if not base_path.exists():
+        raise FileNotFoundError(f"Missing directory: {base_path}")
+
+    for size_dir in sorted(base_path.iterdir()):
+        if not size_dir.is_dir():
             continue
 
-        for file in glob.glob(os.path.join(size_path, "*.txt")):
-            rows.append(load_solution(file, algo, size_dir))
+        size_label = size_dir.name  # "50", "100", ...
+
+        for file in size_dir.iterdir():
+            if file.is_file():
+                rows.append(load_solution(str(file), algo, size_label))
+
 
 
 df = pd.DataFrame(rows)
@@ -97,62 +87,54 @@ stats_q4 = (
 print("\nQ4 summary statistics (by size):\n")
 print(stats_q4)
 
-
 # --------------------------------------------------
-# 4. Q5 — Statistical tests (per size)
-# --------------------------------------------------
-
-for size in sorted(df.size.unique()):
-    print(f"\n=== Instance size: {size} ===")
-
-    ga = df[(df.size == size) & (df.algorithm == "GA")]["total_cost"].values
-    gr = df[(df.size == size) & (df.algorithm == "GRASP")]["total_cost"].values
-
-    if len(ga) == 0 or len(gr) == 0:
-        print("  Skipped (missing data)")
-        continue
-
-    # Welch t-test
-    t_res = stats.ttest_ind(ga, gr, equal_var=False)
-    print("  t-test (Welch):", t_res)
-
-    # Wilcoxon signed-rank (only if paired)
-    if len(ga) == len(gr):
-        w_res = stats.wilcoxon(ga, gr)
-        print("  Wilcoxon:", w_res)
-    else:
-        print("  Wilcoxon: skipped (unequal sample sizes)")
-
-    # Mann–Whitney U
-    mw_res = stats.mannwhitneyu(ga, gr, alternative="two-sided")
-    print("  Mann–Whitney U:", mw_res)
-
-
-# --------------------------------------------------
-# 5. Plots (variance & scalability)
+# 4. Q5 — Best-solution aggregation for statistical tests
 # --------------------------------------------------
 
-# Boxplots per size
-for size in sorted(df.size.unique()):
-    subset = df[df.size == size]
-    plt.figure()
-    subset.boxplot(column="total_cost", by="algorithm")
-    plt.title(f"Solution quality distribution — {size}")
-    plt.suptitle("")
-    plt.ylabel("Total cost")
-    plt.show()
+out_dir = SCRIPT_DIR / "tables"
+out_dir.mkdir(exist_ok=True)
 
-# Runtime scaling plot
-plt.figure()
-for algo in ["GA", "GRASP"]:
-    means = (
-        df[df.algorithm == algo]
-        .groupby("size")["time"].mean()
+# 4.1 Best solution per instance and algorithm
+best_per_instance = (
+    df
+    .groupby(["size", "instance", "algorithm"])["total_cost"]
+    .min()
+    .reset_index()
+)
+
+# 4.2 One CSV per instance size (paired GA vs GRASP)
+for size in sorted(best_per_instance["size"].unique()):
+    paired = (
+        best_per_instance[best_per_instance["size"] == size]
+        .pivot(index="instance", columns="algorithm", values="total_cost")
+        .dropna()
+        .reset_index()
     )
-    plt.plot(means.index, means.values, marker="o", label=algo)
 
-plt.xlabel("Instance size")
-plt.ylabel("Mean runtime")
-plt.legend()
-plt.title("Runtime scalability")
-plt.show()
+    paired.to_csv(
+        out_dir / f"q5_best_solutions_size_{size}.csv",
+        sep=";",
+        index=False
+    )
+
+    print(
+        f"Q5 size {size}: wrote {len(paired)} paired instances"
+    )
+
+# 4.3 One CSV over all sizes combined
+paired_all = (
+    best_per_instance
+    .pivot(index="instance", columns="algorithm", values="total_cost")
+    .dropna()
+    .reset_index()
+)
+
+paired_all.to_csv(
+    out_dir / "q5_best_solutions_all_sizes.csv",
+    sep=";",
+    index=False
+)
+
+print(
+    f"Q5 all sizes: wrote {len(paired_all)} paired instances"
+)
